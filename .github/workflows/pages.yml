@@ -31,6 +31,8 @@ concurrency:
 
 jobs:
   build:
+    # Upstream only: the demo site is openGym's, the PerForm fork publishes none.
+    if: github.repository == 'DuarteSantos8/openGym'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

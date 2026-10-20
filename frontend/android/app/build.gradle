@@ -4,10 +4,13 @@ android {
     namespace "ch.duartesantos.opengym"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "ch.duartesantos.opengym"
+        // PerForm: its own application id, so it installs next to upstream openGym rather than
+        // over it. The Java namespace stays upstream's so merges from openGym stay clean.
+        applicationId "pt.wostpt.perform"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 26
+        // CI passes -PversionCode=<run number> so every build installs over the last one.
+        versionCode Integer.parseInt(String.valueOf(project.findProperty('versionCode') ?: '26'))
         versionName "1.4.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

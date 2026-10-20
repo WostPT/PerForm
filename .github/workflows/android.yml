@@ -1,0 +1,111 @@
+# PerForm's Android app. Upstream openGym builds its APK on GitLab CI (.gitlab-ci.yml, build:apk);
+# the fork has no GitLab mirror, so the same build runs here.
+#
+# Every push to main and every pull request touching the app builds an APK you can download from
+# the run's "Artifacts". A v* tag also publishes it as a GitHub release, which is what the in-app
+# update check reads (frontend/src/lib/update.js).
+#
+# Signing, under Settings → Secrets and variables → Actions (docs/PERFORM_SETUP.md, step 6):
+#   ANDROID_KEYSTORE_B64       base64 of the release keystore (`base64 -w0 perform.jks`)
+#   ANDROID_KEYSTORE_PASSWORD  the keystore password (also used as the key password)
+#   ANDROID_KEY_ALIAS          the key alias, e.g. perform
+# Without them the run builds a debug APK instead ("PerFormTest", installable, but each build may be
+# signed with a different throwaway key, so updating can mean uninstalling first). A tag refuses to
+# release without the key. KEEP THE KEYSTORE: Android only installs updates signed with the same key.
+name: Android
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'catalogue/media/**'
+      - 'scripts/catalogue/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build the mobile web bundle
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:mobile
+
+      - name: Build the APK
+        working-directory: frontend/android
+        run: |
+          set -eu
+          VER="$(node -p "require('../package.json').version")"
+          # Above upstream's hardcoded 26, and higher on every run, so each APK installs over the last.
+          CODE=$((GITHUB_RUN_NUMBER + 100))
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          OUT="$GITHUB_WORKSPACE/out"
+          mkdir -p "$OUT"
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            ./gradlew --no-daemon assembleRelease -PversionCode="$CODE"
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+            "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign \
+              --ks "$RUNNER_TEMP/ks.jks" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --out "$OUT/PerForm-$VER.apk" "$RUNNER_TEMP/aligned.apk"
+            rm -f "$RUNNER_TEMP/ks.jks"
+            "$BT/apksigner" verify --print-certs "$OUT/PerForm-$VER.apk"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "::error::A release tag needs the signing secrets (ANDROID_KEYSTORE_B64 and friends)."
+            exit 1
+          else
+            echo "::warning::No signing key set: building the debug APK (PerFormTest) instead."
+            ./gradlew --no-daemon assembleDebug -PversionCode="$CODE"
+            cp app/build/outputs/apk/debug/app-debug.apk "$OUT/PerForm-$VER-debug.apk"
+          fi
+          cd "$OUT"
+          for apk in *.apk; do sha256sum "$apk" > "$apk.sha256"; cat "$apk.sha256"; done
+          echo "VER=$VER" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PerForm-apk-${{ github.run_number }}
+          path: out/
+          retention-days: 30
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/PerForm-*.apk out/PerForm-*.apk.sha256 \
+            --title "PerForm $GITHUB_REF_NAME" --generate-notes
