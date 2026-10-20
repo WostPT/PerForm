@@ -139,3 +139,9 @@ describe('writtenIds', () => {
       .toEqual({ sessions: ['a'], weights: ['b'] })
   })
 })
+
+describe('PerForm: weigh-ins read from Health Connect', () => {
+  it('are not written back to it', () => {
+    expect(weightRecord({ d: '2026-10-20', w: 80, t: 1, src: 'health-connect' }, 'kg')).toBe(null)
+  })
+})

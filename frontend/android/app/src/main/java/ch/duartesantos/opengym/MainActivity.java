@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HealthConnectPlugin.class);
+        registerPlugin(HealthReadPlugin.class);   // PerForm: reading the watch's data
         registerPlugin(InstallPlugin.class);
         registerPlugin(PrintPlugin.class);
         registerPlugin(RestAlertPlugin.class);

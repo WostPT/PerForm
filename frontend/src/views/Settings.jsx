@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useSyncExternalStore } from 'r
 import { useNavigate, useParams, useLocation, Navigate } from 'react-router-dom'
 import { useStore, DEF, hasData } from '../store/useStore.js'
 import { healthStatus, loadHealth, enableHealth, disableHealth, openHealthConnect, onHealthChange } from '../lib/health-sync.js'
+import PerformHealthCard from '../components/PerformHealthCard.jsx'
 import { workoutControls } from '../lib/workout-controls.js'
 import { speedUnitOf } from '../lib/speed.js'
 import { formulaOf, FORMULA_NAMES } from '../lib/onerm.js'
@@ -785,6 +786,7 @@ export default function Settings({ page = null, find = null, via = null }) {
         {MOBILE && android && S.autoBackup && <BackupFolderRow />}
       </Section>
       {MOBILE && android && <HealthConnectCard S={S} toast={toast} />}
+      {MOBILE && android && <PerformHealthCard toast={toast} />}
       <Section title={t('Bring data in')}>
         <Row icon="download" iconTint="var(--teal)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
         <Row icon="download" iconTint="var(--teal)" title={t('Import from another app')}
