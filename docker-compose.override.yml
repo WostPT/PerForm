@@ -1,0 +1,13 @@
+# PerForm: Docker Compose merges this file over docker-compose.yml automatically.
+#
+# It renames the stack and its images, so that `docker compose pull` fetches PerForm's own builds
+# (published from this fork by .github/workflows/docker-publish.yml) instead of upstream openGym's,
+# and a local `docker compose up -d --build` is tagged as PerForm. Everything else stays upstream's.
+# The homelab server adds deploy/homelab/compose.homelab.yml on top (see docs/PERFORM_SETUP.md).
+name: perform
+
+services:
+  api:
+    image: ghcr.io/wostpt/opengym-api:edge
+  web:
+    image: ghcr.io/wostpt/opengym-web:edge

@@ -11,7 +11,8 @@
 
 import { MOBILE } from './mobile.js'
 
-const REPO = 'DuarteSantos8/openGym'
+// PerForm: updates come from this fork's releases, not upstream openGym's.
+const REPO = 'WostPT/PerForm'
 const LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`
 

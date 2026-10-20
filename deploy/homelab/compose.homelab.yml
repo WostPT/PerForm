@@ -1,0 +1,11 @@
+# The homelab server's layer over docker-compose.yml + docker-compose.override.yml. Selected by
+# COMPOSE_FILE in the server's .env (written by deploy/homelab/install-system.sh).
+#
+# Same pattern as the other app on that server: data on the data disk under /data/perform, files
+# owned by the `wost` user (uid 1000), the web port only on 127.0.0.1 (Tailscale Serve publishes it).
+services:
+  api:
+    user: "1000:1000"
+    volumes:
+      - /data/perform/dados:/data
+      - /data/perform/coach-auth:/coach-auth

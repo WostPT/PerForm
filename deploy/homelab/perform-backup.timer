@@ -1,0 +1,12 @@
+[Unit]
+Description=PerForm - backup every day at 22:30 (Portugal time)
+
+[Timer]
+# The server clock is UTC; the time is Portugal's (follows summer and winter time by itself).
+# 22:30 keeps clear of the other app's 22:00 backup and 22:10 print.
+OnCalendar=*-*-* 22:30:00 Europe/Lisbon
+# If the server was off at 22:30, back up as soon as it starts
+Persistent=true
+
+[Install]
+WantedBy=timers.target

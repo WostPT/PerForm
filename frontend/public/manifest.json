@@ -1,6 +1,6 @@
 {
-  "name": "openGym",
-  "short_name": "openGym",
+  "name": "PerForm",
+  "short_name": "PerForm",
   "description": "Personal gym & body weight tracker",
   "start_url": "./",
   "scope": "./",

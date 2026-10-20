@@ -1,0 +1,9 @@
+[Unit]
+Description=PerForm - daily backup of the data and upload to Google Drive
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=wost
+ExecStart=/home/wost/perform/deploy/homelab/backup.sh
