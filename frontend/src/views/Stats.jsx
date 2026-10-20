@@ -673,6 +673,12 @@ export default function Stats() {
           : t('Waist, arms, body fat and anything else you measure, each with its own curve.')}</div></div>
       <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/measurements')}>{t('Open')}</Button>
     </div>
+    {/* PerForm: the watch's data (views/Health.jsx). */}
+    <div className="card row between" style={{ alignItems: 'center', gap: 12 }}>
+      <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Sleep & recovery')}</h2>
+        <div className="muted small" style={{ marginTop: 4 }}>{t('Sleep, resting heart rate, HRV and steps from your watch.')}</div></div>
+      <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/health')}>{t('Open')}</Button>
+    </div>
     {(hasEffort(S) || hasEstimableEffort(S)) && <EffortCard S={S} />}
 
     <div className="cols">

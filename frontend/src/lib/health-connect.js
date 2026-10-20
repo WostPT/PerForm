@@ -67,6 +67,8 @@ export function sessionRecord(w, { unit, nameOf, speedUnit }) {
 export function weightRecord(b, unit) {
   const w = Number(b?.w)
   if (!b?.d || !(w > 0)) return null
+  // PerForm: a weigh-in read from Health Connect (lib/perform-health.js) is already there.
+  if (b.src) return null
   const typed = Number(b.t)
   const time = typed > 0 && isoOf(new Date(typed)) === b.d ? typed : localMorning(b.d)
   if (!(time > 0)) return null
