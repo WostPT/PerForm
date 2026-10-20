@@ -74,7 +74,11 @@ jobs:
           mkdir -p "$OUT"
           if [ -n "$ANDROID_KEYSTORE_B64" ]; then
             ./gradlew --no-daemon assembleRelease -PversionCode="$CODE"
-            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+            # A keystore copied out of a terminal picks up line breaks and spaces; base64 rejects them.
+            if ! printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/ks.jks"; then
+              echo "::error::ANDROID_KEYSTORE_B64 is not valid base64. Copy it again with: ssh homelab 'base64 -w0 ~/perform-chave/perform.jks' | Set-Clipboard"
+              exit 1
+            fi
             "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
             "$BT/apksigner" sign \
               --ks "$RUNNER_TEMP/ks.jks" \
