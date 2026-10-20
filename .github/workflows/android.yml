@@ -74,8 +74,12 @@ jobs:
           mkdir -p "$OUT"
           if [ -n "$ANDROID_KEYSTORE_B64" ]; then
             ./gradlew --no-daemon assembleRelease -PversionCode="$CODE"
-            # A keystore copied out of a terminal picks up line breaks and spaces; base64 rejects them.
-            if ! printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/ks.jks"; then
+            # A keystore copied out of a terminal picks up line breaks and spaces, and can lose its
+            # trailing "=" padding; base64 rejects both. Strip the whitespace and restore the padding.
+            # (A copy missing real data still fails, at apksigner, which cannot open the keystore.)
+            b64="$(printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]')"
+            while [ $(( ${#b64} % 4 )) -ne 0 ]; do b64="$b64="; done
+            if ! printf '%s' "$b64" | base64 -d > "$RUNNER_TEMP/ks.jks"; then
               # Says what is wrong with the secret without printing it: its size, and which characters
               # (if any) are not base64. A keystore is a few KB, so a short secret means a cut-off copy.
               clean="$(printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]')"
