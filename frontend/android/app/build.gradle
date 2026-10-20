@@ -10,7 +10,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI passes -PversionCode=<run number> so every build installs over the last one.
-        versionCode (project.findProperty('versionCode') ?: '26') as Integer
+        versionCode Integer.parseInt(String.valueOf(project.findProperty('versionCode') ?: '26'))
         versionName "1.4.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
