@@ -44,7 +44,10 @@ export async function healthReadStatus() {
     const p = await plugin()
     if (!p) return { status: 'unsupported', granted: [], history: false }
     return await p.HR.status()
-  } catch { return { status: 'unsupported', granted: [], history: false } }
+  } catch (e) {
+    // Settings shows this, so a phone where the plugin fails says so instead of hiding the switch.
+    return { status: 'error', message: String(e?.message || e || ''), granted: [], history: false }
+  }
 }
 
 // The store, handed over by initHealthRead: this file cannot import it (the store imports the
