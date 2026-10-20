@@ -76,6 +76,11 @@ jobs:
             ./gradlew --no-daemon assembleRelease -PversionCode="$CODE"
             # A keystore copied out of a terminal picks up line breaks and spaces; base64 rejects them.
             if ! printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/ks.jks"; then
+              # Says what is wrong with the secret without printing it: its size, and which characters
+              # (if any) are not base64. A keystore is a few KB, so a short secret means a cut-off copy.
+              clean="$(printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]')"
+              echo "Secret: ${#clean} characters after removing whitespace (length mod 4 = $(( ${#clean} % 4 )))."
+              echo "Characters that are not base64: $(printf '%s' "$clean" | tr -d 'A-Za-z0-9+/=' | od -An -c | tr -s ' ' | head -c 200)"
               echo "::error::ANDROID_KEYSTORE_B64 is not valid base64. Copy it again with: ssh homelab 'base64 -w0 ~/perform-chave/perform.jks' | Set-Clipboard"
               exit 1
             fi
