@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fmtTime, hrProfile, isOutdoorRun, isRun, pbsOf, restingHr, runPbs, seenMaxHr, zonesOver, zoneTimes } from './perform-running.js'
+import { fmtTime, hrProfile, loadSummary, runLoad, weeklyLoad, isOutdoorRun, isRun, pbsOf, restingHr, runPbs, seenMaxHr, zonesOver, zoneTimes } from './perform-running.js'
 
 // PerForm: personal bests and heart-rate zones from the runs' details.
 const at = (iso, hh = 7) => new Date(`${iso}T${String(hh).padStart(2, '0')}:00:00`).getTime()
@@ -93,4 +93,46 @@ describe('heart-rate zones', () => {
 it('times as m:ss, h:mm:ss past the hour', () => {
   expect(fmtTime(1471)).toBe('24:31')
   expect(fmtTime(6727)).toBe('1:52:07')
+})
+
+describe('training load', () => {
+  const prof = { max: 182, rest: 52 }
+  const health = { days: { '2026-10-20': { rhr: 52 } } }
+
+  it('a run\'s TRIMP from its heart rate: 30 minutes at 60% of reserve is about 36', () => {
+    // 60% of a 130 reserve over 52 is 130 bpm: the 125 band's middle is 127.5, close enough.
+    expect(runLoad({ details: { hrs: { 128: 1800 } } }, { max: 182, rest: 52 })).toEqual({ load: 37, estimated: false })
+    // Harder minutes weigh far more than easy ones.
+    expect(runLoad({ details: { hrs: { 165: 1800 } } }, prof).load).toBeGreaterThan(2.5 * 37)
+  })
+
+  it('without heart rate, from its duration, marked as estimated', () => {
+    const w = { start: 0, end: 1800000 }
+    expect(runLoad(w, prof)).toEqual({ load: 43, estimated: true })
+    expect(runLoad({ entries: [{ sets: [{ min: 30, done: true }] }] }, null)).toEqual({ load: 43, estimated: true })
+  })
+
+  it('acute against chronic load, read in plain words', () => {
+    const steady = ['2026-09-18', '2026-09-25', '2026-10-02', '2026-10-09', '2026-10-16'].map((d, i) => run('s' + i, d, { hrs: { 140: 1800 } }))
+    const S = { workouts: steady, health }
+    const a = loadSummary(S, NOW)
+    expect(a.reading).toBe('steady')
+    expect(a.ratio).toBe(1)
+    // Three more runs this week: a jump.
+    const more = ['2026-10-19', '2026-10-20', '2026-10-21'].map((d, i) => run('m' + i, d, { hrs: { 140: 1800 } }))
+    expect(loadSummary({ workouts: [...steady, ...more], health }, NOW).reading).toBe('fast')
+    expect(loadSummary({ workouts: [], health }, NOW)).toBeNull()
+  })
+
+  it('a first week reads as a start, not as a jump', () => {
+    expect(loadSummary({ workouts: [run('a', '2026-10-20', { hrs: { 140: 1800 } })], health }, NOW)).toMatchObject({ reading: 'start' })
+  })
+
+  it('load and km week by week, typed runs included', () => {
+    const typed = { id: 't', d: '2026-10-14', start: at('2026-10-14'), end: at('2026-10-14') + 1800000, entries: [{ id: '0685', sets: [{ min: 30, speed: 10, done: true }] }] }
+    const weeks = weeklyLoad({ workouts: [run('a', '2026-10-20', { km: 5 }), run('b', '2026-10-21', { km: 4.2 }), typed], health }, 3, NOW)
+    expect(weeks.map(x => x.from)).toEqual(['2026-10-05', '2026-10-12', '2026-10-19'])
+    expect(weeks.map(x => x.km)).toEqual([0, 5, 9.2])
+    expect(weeks[2].load).toBeGreaterThan(0)
+  })
 })

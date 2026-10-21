@@ -682,7 +682,7 @@ export default function Stats() {
     </div>
     {workouts.some(isRun) && <div className="card row between" style={{ alignItems: 'center', gap: 12 }}>
       <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Running')}</h2>
-        <div className="muted small" style={{ marginTop: 4 }}>{t('Personal bests and heart-rate zones from your runs.')}</div></div>
+        <div className="muted small" style={{ marginTop: 4 }}>{t('Training load, personal bests and heart-rate zones from your runs.')}</div></div>
       <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/running')}>{t('Open')}</Button>
     </div>}
     {(hasEffort(S) || hasEstimableEffort(S)) && <EffortCard S={S} />}

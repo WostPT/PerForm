@@ -4,15 +4,51 @@ import { useStore } from '../store/useStore.js'
 import { fmtDate } from '../lib/format.js'
 import { dateLocale, t } from '../lib/i18n.js'
 import { fmtPace } from '../lib/perform-run-details.js'
-import { fmtTime, hrProfile, LONGEST, PB_DISTANCES, runPbs, runsOf, seenMaxHr, zonesOver } from '../lib/perform-running.js'
+import { fmtTime, hrProfile, loadSummary, LONGEST, PB_DISTANCES, runPbs, runsOf, seenMaxHr, weeklyLoad, zonesOver } from '../lib/perform-running.js'
 import { WorkoutRow, workoutDetailSheet } from '../sheets.jsx'
 import PerformZones from '../components/PerformZones.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Section } from '../components/ui.jsx'
 
-// PerForm: the running module (lib/perform-running.js). Personal bests and heart-rate zones from
+// PerForm: the running module (lib/perform-running.js). Training load, personal bests and heart-rate zones from
 // the runs' details, shown wherever the log is, the desktop included.
 const fmtKm = n => (Math.round(n * 100) / 100).toLocaleString(dateLocale(), { maximumFractionDigits: 2 })
+
+const READINGS = {
+  start: ['Getting started', 'Under four weeks of runs: the comparison needs a month to settle.', 'var(--label-2)'],
+  easing: ['Easing off', 'Less than you are used to. Fine for a recovery week; if it lasts, fitness slips.', 'var(--blue)'],
+  steady: ['Steady', 'In line with what you are used to: building safely.', 'var(--green)'],
+  building: ['Building', 'More than usual. Fine for a week; keep an eye on how your legs feel.', 'var(--yellow)'],
+  fast: ['Ramping up fast', 'Much more than you are used to, the range where running injuries cluster. Ease off a little.', 'var(--red)'],
+}
+
+function LoadCard({ S }) {
+  const sum = loadSummary(S)
+  const weeks = weeklyLoad(S, 12)
+  if (!sum && !weeks.some(w => w.load)) return null
+  const top = Math.max(1, ...weeks.map(w => w.load))
+  const [title, text, color] = READINGS[sum?.reading || 'easing']
+  return <div className="card">
+    <div className="row between" style={{ alignItems: 'baseline' }}>
+      <h2 style={{ margin: 0 }}>{t('Training load')}</h2>
+      {sum && <b style={{ color }}>{t(title)}</b>}
+    </div>
+    <div className="muted small" style={{ marginTop: 4 }}>{sum ? t(text) : t('No runs in the last 4 weeks.')}</div>
+    {sum && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 12 }}>
+      <div><div className="small muted">{t('This week')}</div><b>{sum.acute}</b></div>
+      <div><div className="small muted">{t('Usual week')}</div><b>{sum.chronic}</b></div>
+      <div><div className="small muted">{t('Ratio')}</div><b>{sum.ratio ?? '–'}</b></div>
+    </div>}
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 90, marginTop: 14 }} role="img" aria-label={t('Load per week, last 12 weeks')}>
+      {weeks.map((w, i) => <div key={w.from} title={`${fmtDate(w.from)} · ${w.load} · ${w.km} km`}
+        style={{ flex: 1, height: `${Math.max(w.load ? 4 : 0, (w.load / top) * 100)}%`, background: i === weeks.length - 1 ? 'var(--acc)' : 'var(--surface-3)', borderRadius: 3 }} />)}
+    </div>
+    <div style={{ display: 'flex', gap: 4, marginTop: 4 }} className="small dim">
+      {weeks.map(w => <div key={w.from} style={{ flex: 1, textAlign: 'center', fontSize: '0.68rem' }}>{w.km ? Math.round(w.km) : ''}</div>)}
+    </div>
+    <div className="small dim" style={{ marginTop: 6 }}>{t('Load per week over 12 weeks, km under each bar. Load weighs each minute by your heart rate; a run without one is estimated from its time.')}</div>
+  </div>
+}
 
 function MaxHr({ S, prof }) {
   const update = useStore(s => s.update)
@@ -47,10 +83,12 @@ export default function Running() {
   return <div className="narrow">
     <div className="hdr">
       <button className="iconbtn" onClick={() => nav(-1)} aria-label={t('Back')}><Icon name="chevronLeft" /></button>
-      <div style={{ flex: 1, marginLeft: 10 }}><h1>{t('Running')}</h1><div className="sub">{t('Personal bests and heart-rate zones from your runs')}</div></div>
+      <div style={{ flex: 1, marginLeft: 10 }}><h1>{t('Running')}</h1><div className="sub">{t('Training load, personal bests and heart-rate zones from your runs')}</div></div>
     </div>
 
     {!runs.length && <div className="card"><div className="muted small">{t('No runs yet. A run from your watch shows here once Health Connect has it.')}</div></div>}
+
+    {runs.length > 0 && <LoadCard S={S} />}
 
     {(pbRows.length > 0 || bests[LONGEST]) && <Section title={t('Personal bests')} footer={t('From runs outdoors with the watch. Treadmill runs count for zones, not for bests.')}>
       <div className="list">

@@ -4,7 +4,7 @@ import { dateLocale, t } from '../lib/i18n.js'
 import { MOBILE } from '../lib/mobile.js'
 import { fmtPace, routePath, withoutStops } from '../lib/perform-run-details.js'
 import { askRoute } from '../lib/perform-health-read.js'
-import { fmtTime, hrProfile, LONGEST, PB_DISTANCES, pbsOf, zoneTimes } from '../lib/perform-running.js'
+import { fmtTime, hrProfile, isRun, LONGEST, PB_DISTANCES, pbsOf, runLoad, zoneTimes } from '../lib/perform-running.js'
 import PerformZones from './PerformZones.jsx'
 import { Button } from './ui.jsx'
 import Icon from './Icon.jsx'
@@ -65,12 +65,14 @@ export default function PerformRunDetails({ w, toast }) {
   const pbs = pbsOf(S.workouts, live).map(k => k === LONGEST
     ? t('Longest run: {0} km', fmtKm(d.km || live.watch?.km))
     : t('New {0} best: {1}', t(PB_DISTANCES.find(x => x.key === k).label), fmtTime(d.best[k])))
+  const load = isRun(live) ? runLoad(live, prof) : null
   const stats = [
     d.km > 0 && [t('Distance'), `${fmtKm(d.km)} km`],
     avgPace && [t('Avg pace'), `${fmtPace(avgPace)} /km`],
     live.watch?.hrAvg && [t('Avg HR'), `${live.watch.hrAvg} bpm`],
     d.gain != null && [t('Climb'), `${d.gain} m`],
     d.spm > 0 && [t('Cadence'), `${d.spm} spm`],
+    load?.load > 0 && [t('Load'), `${load.estimated ? '~' : ''}${load.load}`],
   ].filter(Boolean)
 
   return <div className="card" style={{ margin: '4px 0 14px' }}>
