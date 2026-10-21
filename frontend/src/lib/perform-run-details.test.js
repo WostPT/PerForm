@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DETAILS_V, distanceTrack, fmtPace, haversine, routePath, runDetails, withoutStops } from './perform-run-details.js'
+import { bestEfforts, DETAILS_V, distanceTrack, hrBands, fmtPace, haversine, routePath, runDetails, withoutStops } from './perform-run-details.js'
 
 // PerForm: a watch workout's samples worked down to splits, curves and a slimmed route.
 const T0 = new Date('2026-10-21T07:00:00').getTime()
@@ -129,6 +129,37 @@ describe('runDetails', () => {
     const raw = { start: T0, end: T0 + 600000, route: 'none', dist: [[T0, T0 + 300000, 700], [T0 + 300000, T0 + 600000, 0]] }
     const d = runDetails(raw, W)
     expect(d.series.pace.slice(-10).every(p => p == null)).toBe(true)
+  })
+})
+
+describe('best efforts and heart rate, kept for the running page', () => {
+  it('the fastest km in a run, and no 5 km in a 4.9 km run', () => {
+    const d = runDetails(rawRun(), W)
+    expect(Math.abs(d.best['1000'] - 417)).toBeLessThanOrEqual(1)
+    expect(d.best['5000']).toBeUndefined()
+  })
+
+  it('the fastest km anywhere in the run, not only from the start', () => {
+    // 1 km easy at 2 m/s, then 1 km fast at 4 m/s.
+    const tr = [[0, 0], [500000, 1000], [750000, 2000]]
+    expect(bestEfforts(tr)).toEqual({ 1000: 250 })
+  })
+
+  it('a wait at a crossing inside the stretch is left out', () => {
+    // 600 m, 60 s standing, 600 m, all at 3 m/s.
+    const tr = [[0, 0], [200000, 600], [260000, 600], [460000, 1200]]
+    expect(bestEfforts(tr)['1000']).toBe(333)
+  })
+
+  it('every second of heart rate lands in its 5-bpm band', () => {
+    const d = runDetails(rawRun(), W)
+    const total = Object.values(d.hrs).reduce((a, x) => a + x, 0)
+    expect(Math.abs(total - MIN * 60)).toBeLessThanOrEqual(2)
+    expect(Object.keys(d.hrs).map(Number)).toEqual([140, 145, 150, 155, 160, 165, 170])
+  })
+
+  it('a gap in the recording is not filled with the last heart rate', () => {
+    expect(hrBands([[0, 150], [120000, 160]], 0, 125000)).toEqual({ 150: 30, 160: 5 })
   })
 })
 

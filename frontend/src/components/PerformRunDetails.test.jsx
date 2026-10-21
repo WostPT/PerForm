@@ -59,4 +59,18 @@ describe('PerformRunDetails', () => {
     mount(w({ v: 1, km: 1, sec: 400, splits: [], series: { t: [] }, route: null, routeConsent: true }))
     expect(host.textContent).toContain('Android app to allow its route')
   })
+
+  it('a PB the run set, and its time in each heart-rate zone', () => {
+    const today = new Date().toISOString().slice(0, 10)
+    useStore.setState(s => ({ S: { ...s.S, running: { maxHr: 182 }, health: { days: { [today]: { rhr: 52 } } } } }))
+    const run = { ...w({ v: 4, km: 5.02, sec: 1800, splits: [], series: { t: [] }, route: null, best: { 1000: 330, 5000: 1750 }, hrs: { 125: 600, 160: 1200 } }),
+      start: Date.now() - 3600000, entries: [{ id: '0685', sets: [] }] }
+    mount(run)
+    const text = host.textContent
+    expect(text).toContain('New 5 km best: 29:10')
+    expect(text).toContain('Longest run: 5.02 km')
+    expect(text).toContain('Heart-rate zones')
+    expect(text).toContain('67%')       // 1200 of 1800 s in zone 4
+    useStore.setState(s => ({ S: { ...s.S, running: undefined, health: undefined } }))
+  })
 })

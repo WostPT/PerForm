@@ -14,10 +14,12 @@
 //     series: { t: [s from start], pace: [s/km], hr: [bpm], alt: [m] },   // null where unknown
 //     route: [[lat, lon]] | null,
 //     routeConsent: true, // Health Connect wants the route allowed first (HR.askRoute)
+//     best: { 1000: s, 5000: s, … },   // fastest stretch of each distance in it, moving time
+//     hrs: { 140: s, 145: s, … },      // seconds in each 5-bpm band: the zones (lib/perform-running.js)
 //   }
 //   or { v, none: true } when Health Connect had nothing more for the session.
 // DETAILS_V goes up when what is worked out changes: workouts with an older one are read again.
-export const DETAILS_V = 3
+export const DETAILS_V = 4
 const ROUTE_POINTS = 200
 const SERIES_POINTS = 60
 // A last split shorter than this is folded into the one before it rather than shown on its own.
@@ -26,6 +28,9 @@ const MIN_LAST_SPLIT_M = 100
 // before the watch is stopped, a wait at a crossing. Left out of the splits, as Strava and Garmin
 // do; the average pace stays on the whole workout's time.
 export const STOPPED_MS = 0.8
+// The distances a run's best efforts are kept for, in metres: 1 km to the marathon.
+export const BEST_M = [1000, 5000, 10000, 21097.5, 42195]
+export const bestKey = m => String(Math.floor(m))
 
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const arr = v => (Array.isArray(v) ? v : [])
@@ -164,6 +169,53 @@ export function movingMs(track, speed, a, b) {
 }
 
 /**
+ * The fastest stretch of each distance in BEST_M the run covered, in seconds of moving time:
+ * { 1000: 402, 5000: 2130 }, or null. Any stretch counts, not only the one from the start, as
+ * Strava's best efforts do; a wait at a crossing inside it is left out, as it is from the splits.
+ */
+export function bestEfforts(track) {
+  if (track.length < 2) return null
+  const mv = [0]
+  for (let i = 1; i < track.length; i++) {
+    const dt = track[i][0] - track[i - 1][0]
+    const v = dt > 0 ? (track[i][1] - track[i - 1][1]) / (dt / 1000) : 0
+    mv.push(mv[i - 1] + (v >= STOPPED_MS ? dt : 0))
+  }
+  const total = track[track.length - 1][1]
+  const out = {}
+  for (const D of BEST_M) {
+    if (D > total) break
+    let best = Infinity, j = 1
+    for (let i = 0; i < track.length - 1; i++) {
+      const need = track[i][1] + D
+      while (j < track.length && track[j][1] < need) j++
+      if (j >= track.length) break
+      const a = track[j - 1], b = track[j]
+      const f = b[1] > a[1] ? (need - a[1]) / (b[1] - a[1]) : 1
+      best = Math.min(best, mv[j - 1] + (mv[j] - mv[j - 1]) * f - mv[i])
+    }
+    if (best < Infinity && best > 0) out[bestKey(D)] = Math.round(best / 1000)
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/** Seconds spent in each 5-bpm band, { 140: 95, 145: 210 }, or null without heart rate. */
+export function hrBands(hr, start, end) {
+  const out = {}
+  for (let i = 0; i < hr.length; i++) {
+    const from = Math.max(hr[i][0], start)
+    // A sample stands until the next one, but not over a gap of more than 30 s in the recording.
+    const next = i + 1 < hr.length ? hr[i + 1][0] : hr[i][0] + 5000
+    const to = Math.min(next, end, hr[i][0] + 30000)
+    if (to <= from) continue
+    const band = Math.floor(hr[i][1] / 5) * 5
+    out[band] = (out[band] || 0) + (to - from) / 1000
+  }
+  for (const k of Object.keys(out)) { out[k] = Math.round(out[k]); if (!out[k]) delete out[k] }
+  return Object.keys(out).length ? out : null
+}
+
+/**
  * The details for one session, from what HR.details returned (`raw`). `w` is the workout, for its
  * start, end and the distance the watch gave. `routeOverride` is a route from HR.askRoute.
  */
@@ -229,6 +281,10 @@ export function runDetails(raw, w, routeOverride = null) {
   if (gain != null) out.gain = Math.round(gain)
   if (steps.length) out.spm = Math.round(sumOver(steps, start, end) / ((end - start) / 60000))
   if (consent) out.routeConsent = true
+  const best = bestEfforts(track)
+  if (best) out.best = best
+  const hrs = hrBands(hr, start, end)
+  if (hrs) out.hrs = hrs
   return out
 }
 

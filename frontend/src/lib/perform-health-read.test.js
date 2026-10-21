@@ -96,7 +96,7 @@ describe('turning it on', () => {
     h.details = { start, end, route: 'none', dist: [[start, end, 5000]], hr: [[start + 60000, 150]] }
     await hr.enableHealthRead()
     expect(h.calls.filter(c => c[0] === 'details')).toEqual([['details', { id: 'r1' }]])
-    expect(S.workouts[0].details).toMatchObject({ v: 3, km: 5, splits: [{ km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }] })
+    expect(S.workouts[0].details).toMatchObject({ v: 4, km: 5, splits: [{ km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }] })
     await hr.readHealthNow({ force: true })
     expect(h.calls.filter(c => c[0] === 'details')).toHaveLength(1)
   })
@@ -111,7 +111,7 @@ describe('turning it on', () => {
     hr = await import('./perform-health-read.js')
     hr.initHealthRead(store)
     await hr.readHealthNow({ force: true })
-    expect(S.workouts[0].details).toMatchObject({ v: 3, km: 5 })
+    expect(S.workouts[0].details).toMatchObject({ v: 4, km: 5 })
   })
 
   it('an older APK without details still reads the rest', async () => {

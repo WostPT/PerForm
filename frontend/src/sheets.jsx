@@ -68,6 +68,7 @@ import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
 import { watchGlyph, watchRowParts } from './lib/perform-watch-workouts.js'   // PerForm
+import { pbsOf } from './lib/perform-running.js'   // PerForm
 import PerformRunDetails from './components/PerformRunDetails.jsx'   // PerForm
 
 const S = () => useStore.getState().S
@@ -2759,12 +2760,13 @@ export function WorkoutRow({ w, onClick }) {
   const st = useStore(s => s.S)
   const glyph = watchGlyph(w) || glyphOf((st.routines.find(r => r.id === w.routineId) || {}).emoji)   // PerForm
   const mediaN = workoutMediaCount(w)
+  const prN = (w.prs?.length || 0) + pbsOf(st.workouts, w).length   // PerForm: a run's PBs too
   return <div className="item" {...tappable(onClick)}>
     <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 19 }}><Icon name={glyph} /></span>
     <div className="grow"><div className="tt">{w.name}</div>
       <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), ...(watchRowParts(w) || [tn('{0} set', '{0} sets', setsDone(w)), fmtVol(w.vol, st.unit)])].join(' · ')}</div></div>
     {mediaN > 0 && <span className="wrow-media" title={tn('{0} photo or video', '{0} photos or videos', mediaN)} aria-label={tn('{0} photo or video', '{0} photos or videos', mediaN)}><Icon name="image" />{mediaN}</span>}
-    {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}
+    {prN > 0 && <span className="pr"><Icon name="trophy" />{prN} PR</span>}
     <Icon name="chevronRight" className="chev" />
   </div>
 }
