@@ -10,18 +10,22 @@
 //     km, sec,            // distance and time the splits are worked from
 //     gain,               // metres climbed, when known
 //     spm,                // steps per minute, from the watch's step count (it shares no real cadence)
-//     splits: [{ km, sec, hr, elev, spm }],   // one per km, the last one shorter
+//     splits: [{ km, sec, hr, elev, spm }],   // one per km, the last one shorter; sec = moving time
 //     series: { t: [s from start], pace: [s/km], hr: [bpm], alt: [m] },   // null where unknown
 //     route: [[lat, lon]] | null,
 //     routeConsent: true, // Health Connect wants the route allowed first (HR.askRoute)
 //   }
 //   or { v, none: true } when Health Connect had nothing more for the session.
 // DETAILS_V goes up when what is worked out changes: workouts with an older one are read again.
-export const DETAILS_V = 2
+export const DETAILS_V = 3
 const ROUTE_POINTS = 200
 const SERIES_POINTS = 60
 // A last split shorter than this is folded into the one before it rather than shown on its own.
 const MIN_LAST_SPLIT_M = 100
+// Slower than this (about 21 min/km, well under a slow walk) is standing, not moving: the seconds
+// before the watch is stopped, a wait at a crossing. Left out of the splits, as Strava and Garmin
+// do; the average pace stays on the whole workout's time.
+export const STOPPED_MS = 0.8
 
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const arr = v => (Array.isArray(v) ? v : [])
@@ -140,6 +144,26 @@ function climbed(alts) {
 }
 
 /**
+ * How much of [a, b] was spent moving, in ms. From the watch's speed samples when it has them
+ * there, else from how fast the distance track rose between its points.
+ */
+export function movingMs(track, speed, a, b) {
+  const sp = speed.filter(x => x[0] >= a - 15000 && x[0] <= b + 15000)
+  const pairs = sp.length >= 2 ? sp.map((x, i) => i && [sp[i - 1][0], x[0], (sp[i - 1][1] + x[1]) / 2]).filter(Boolean)
+    : track.map((x, i) => i && [track[i - 1][0], x[0], x[0] > track[i - 1][0] ? (x[1] - track[i - 1][1]) / ((x[0] - track[i - 1][0]) / 1000) : 0]).filter(Boolean)
+  if (!pairs.length) return b - a
+  let ms = 0, covered = 0
+  for (const [s, e, v] of pairs) {
+    const o = Math.min(b, e) - Math.max(a, s)
+    if (o <= 0) continue
+    covered += o
+    if (v >= STOPPED_MS) ms += o
+  }
+  // Time the samples do not reach (a gap in them) is counted as moving rather than guessed away.
+  return ms + Math.max(0, (b - a) - covered)
+}
+
+/**
  * The details for one session, from what HR.details returned (`raw`). `w` is the workout, for its
  * start, end and the distance the watch gave. `routeOverride` is a route from HR.askRoute.
  */
@@ -169,7 +193,7 @@ export function runDetails(raw, w, routeOverride = null) {
     let t0 = track[0][0], m0 = 0
     for (const m of marks) {
       const t1 = interp(track, m, 1, 0)
-      const split = { km: round((m - m0) / 1000, 2), sec: Math.round((t1 - t0) / 1000) }
+      const split = { km: round((m - m0) / 1000, 2), sec: Math.round(movingMs(track, speed, t0, t1) / 1000) }
       const h = meanIn(hr, t0, t1)
       if (h != null) split.hr = Math.round(h)
       if (alts.length) split.elev = Math.round(interp(alts, t1) - interp(alts, t0))
