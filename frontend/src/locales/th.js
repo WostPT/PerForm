@@ -1208,6 +1208,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'คำตอบของคุณในแบบสอบถามเริ่มต้น รวมถึงข้อจำกัดหรืออาการบาดเจ็บที่คุณอธิบาย',
   'A few preferences': 'การตั้งค่าบางอย่าง',
   'Your unit, your language and which effort scale you log.': 'หน่วย ภาษา และมาตรวัดความหนักที่คุณใช้บันทึก',
+  'Sleep and recovery': 'การนอนและการฟื้นตัว',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'จากนาฬิกาของคุณ ในช่วงเวลาเดียวกัน: ระยะเวลาที่คุณนอน อัตราการเต้นของหัวใจขณะพัก HRV และจำนวนก้าว',
   'Likes: {0}': 'ชอบ: {0}',
   'Limits': 'ข้อจำกัด',
   'Limits: {0}': 'ข้อจำกัด: {0}',

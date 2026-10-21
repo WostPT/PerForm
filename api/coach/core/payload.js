@@ -12,6 +12,7 @@
  */
 import { glyphStr } from './glyphs.js';
 import { LIBRARY, LIB_BY_ID, libraryHas, libraryName, librarySlice, isStretch, MAX_LIBRARY } from './library.js';
+import { recoveryOf } from './perform-recovery.js';
 
 export const CONTRACT = 1;
 // Bounds from FR-22. A review reads a training block, not a training career: more history
@@ -536,6 +537,9 @@ export function build(S, opts = {}) {
       since.setDate(since.getDate() - 28);
       const dated = !!on && Number.isFinite(since.getTime());
       p.bodyweight = { goal: num(S.targetW) ?? null, series: dated ? weighIns(S, iso(since), on) : [] };
+      // PerForm: the watch's sleep and recovery over the same four weeks, ending on the session day.
+      const rec = dated ? recoveryOf(S, iso(since), on) : null;
+      if (rec) p.recovery = rec;
     } else {
       p.session = null;
       p.previous = [];
@@ -551,6 +555,9 @@ export function build(S, opts = {}) {
     };
     p.aggregates = aggregates(S, workouts);
     p.bodyweight = { goal: num(S.targetW) ?? null, series: weighIns(S, p.window.from, null) };
+    // PerForm: the watch's sleep and recovery over the review window.
+    const rec = recoveryOf(S, p.window.from, null);
+    if (rec) p.recovery = rec;
     if (opts.note) p.userNote = String(opts.note).slice(0, MAX_NOTE_CHARS);
     if (opts.cohort) p.cohort = cleanCohort(opts.cohort);
     // A review names mostly what is already trained; 60 candidates is plenty for a swap.

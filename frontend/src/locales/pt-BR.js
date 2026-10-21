@@ -613,6 +613,8 @@ export const PT_BR_OVERRIDES = {
   'Your intake answers, including any limitations or injuries you describe.': 'Suas respostas ao questionário inicial, incluindo as limitações ou lesões que você descreve.',
   'A few preferences': 'Algumas preferências',
   'Your unit, your language and which effort scale you log.': 'Sua unidade, seu idioma e a escala com que você registra o esforço.',
+  'Sleep and recovery': 'Sono e recuperação',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Do seu relógio, para o mesmo período: quanto você dormiu, frequência cardíaca em repouso, VFC e passos.',
   'Not quite right? Say what to change below and I will revise the whole plan.': 'Não ficou bom? Diga abaixo o que mudar e eu reviso o plano inteiro.',
   'Pick one to continue.': 'Escolha uma para continuar.',
   'Pick what you will actually keep, not the best week you can imagine.': 'Escolha o que você vai realmente cumprir, não a melhor semana que consegue imaginar.',

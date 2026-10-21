@@ -1109,6 +1109,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': '你在初始問答中的回答，包括你描述的任何限制或傷病。',
   'A few preferences': '幾項偏好設定',
   'Your unit, your language and which effort scale you log.': '你的單位、語言，以及你記錄強度所用的量表。',
+  'Sleep and recovery': '睡眠與恢復',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': '來自你的手錶，同一段期間：睡了多久、靜止心率、HRV 和步數。',
   'Likes: {0}': '偏好：{0}',
   'Limits': '限制條件',
   'Limits: {0}': '限制：{0}',

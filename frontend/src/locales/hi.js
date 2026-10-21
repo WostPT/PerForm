@@ -1120,6 +1120,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'शुरुआती सवालों के आपके उत्तर, जिनमें आपकी बताई गई सीमाएँ या चोटें भी शामिल हैं।',
   'A few preferences': 'कुछ प्राथमिकताएँ',
   'Your unit, your language and which effort scale you log.': 'आपकी इकाई, आपकी भाषा और वह पैमाना जिस पर आप मेहनत दर्ज करते हैं।',
+  'Sleep and recovery': 'नींद और रिकवरी',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'आपकी घड़ी से, उसी अवधि के लिए: आप कितनी देर सोए, आराम की हृदय गति, HRV और कदम।',
   'Likes: {0}': 'पसंद: {0}',
   'Limits': 'सीमाएँ',
   'Limits: {0}': 'सीमाएँ: {0}',

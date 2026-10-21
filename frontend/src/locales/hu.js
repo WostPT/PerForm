@@ -1200,6 +1200,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'A kérdőívre adott válaszaid, az általad leírt korlátokkal vagy sérülésekkel együtt.',
   'A few preferences': 'Néhány beállítás',
   'Your unit, your language and which effort scale you log.': 'A mértékegységed, a nyelved, és hogy melyik skálán rögzíted a megerőltetést.',
+  'Sleep and recovery': 'Alvás és regeneráció',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Az órádról, ugyanarra az időszakra: mennyit aludtál, nyugalmi pulzus, HRV és lépések.',
   'Likes: {0}': 'Kedveli: {0}',
   'Limits': 'Korlátok',
   'Limits: {0}': 'Korlátok: {0}',
