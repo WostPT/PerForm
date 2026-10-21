@@ -6,7 +6,7 @@
 // hundreds for the samples.
 //
 //   w.details = {
-//     v: 1,
+//     v: DETAILS_V,
 //     km, sec,            // distance and time the splits are worked from
 //     gain,               // metres climbed, when known
 //     spm,                // steps per minute, from the watch's step count (it shares no real cadence)
@@ -15,7 +15,9 @@
 //     route: [[lat, lon]] | null,
 //     routeConsent: true, // Health Connect wants the route allowed first (HR.askRoute)
 //   }
-//   or { v: 1, none: true } when Health Connect had nothing more for the session.
+//   or { v, none: true } when Health Connect had nothing more for the session.
+// DETAILS_V goes up when what is worked out changes: workouts with an older one are read again.
+export const DETAILS_V = 2
 const ROUTE_POINTS = 200
 const SERIES_POINTS = 60
 // A last split shorter than this is folded into the one before it rather than shown on its own.
@@ -47,10 +49,19 @@ const samples = list => arr(list).filter(x => Array.isArray(x) && num(x[0]) != n
 
 /**
  * The distance covered by each moment: [[t, metres so far]], never going down. From the GPS route
- * when there is one, scaled to the watch's own total (it smooths the GPS jitter that makes a raw
- * route read long); else from the distance records, else from the speed samples.
+ * when there is one, else from the distance records, else from the speed samples; scaled to the
+ * watch's own total when it is near it (GPS jitter makes a raw route read long, and the records
+ * summed can overlap where Health Connect's own total does not), so the splits add up to the
+ * distance shown everywhere else.
  */
-export function distanceTrack({ route, dist, speed }, start, totalM = null) {
+export function distanceTrack(src, start, totalM = null) {
+  const out = rawTrack(src, start)
+  const m = out.length ? out[out.length - 1][1] : 0
+  const f = totalM > 0 && m > 0 ? totalM / m : 1
+  return f > 0.8 && f < 1.25 && f !== 1 ? out.map(([t, x]) => [t, x * f]) : out
+}
+
+function rawTrack({ route, dist, speed }, start) {
   if (route.length >= 2) {
     const out = [[route[0][0], 0]]
     let m = 0
@@ -58,8 +69,7 @@ export function distanceTrack({ route, dist, speed }, start, totalM = null) {
       m += haversine(route[i - 1][1], route[i - 1][2], route[i][1], route[i][2])
       out.push([route[i][0], m])
     }
-    const f = totalM > 0 && m > 0 ? totalM / m : 1
-    return f > 0.8 && f < 1.25 ? out.map(([t, x]) => [t, x * f]) : out
+    return out
   }
   if (dist.length) {
     const out = [[Math.min(start, dist[0][0]), 0]]
@@ -135,18 +145,19 @@ function climbed(alts) {
  */
 export function runDetails(raw, w, routeOverride = null) {
   const start = num(raw?.start) ?? num(w?.start), end = num(raw?.end) ?? num(w?.end)
-  if (start == null || end == null || !(end > start)) return { v: 1, none: true }
+  if (start == null || end == null || !(end > start)) return { v: DETAILS_V, none: true }
   const consent = raw?.route === 'consent' && !routeOverride
   const route = cleanRoute(routeOverride || raw?.route).filter(p => p[0] >= start - 60000 && p[0] <= end + 60000)
   const dist = intervals(raw?.dist), steps = intervals(raw?.steps), elev = intervals(raw?.elev)
   const hr = samples(raw?.hr).filter(x => x[1] > 0), speed = samples(raw?.speed).filter(x => x[1] >= 0)
   const recordedM = dist.reduce((a, x) => a + x[2], 0)
-  const totalHint = recordedM > 0 ? recordedM : (num(w?.watch?.km) > 0 ? w.watch.km * 1000 : null)
+  // Health Connect's own total for the session first: it is the one History and the list show.
+  const totalHint = num(w?.watch?.km) > 0 ? w.watch.km * 1000 : recordedM > 0 ? recordedM : null
   const track = distanceTrack({ route, dist, speed }, start, totalHint)
   const totalM = track.length ? track[track.length - 1][1] : 0
   const alts = route.filter(p => p[3] != null).map(p => [p[0], p[3]])
 
-  if (!track.length && !hr.length && !consent) return { v: 1, none: true }
+  if (!track.length && !hr.length && !consent) return { v: DETAILS_V, none: true }
 
   // Splits: the moment each whole km was reached.
   const splits = []
@@ -186,14 +197,27 @@ export function runDetails(raw, w, routeOverride = null) {
     series.hr.push(round(meanIn(hr, a, b)))
     series.alt.push(alts.length ? round(meanIn(alts, a, b) ?? interp(alts, (a + b) / 2), 1) : null)
   }
+  series.pace = withoutStops(series.pace)
   for (const k of ['pace', 'hr', 'alt']) if (series[k].every(x => x == null)) delete series[k]
 
-  const out = { v: 1, km: round(totalM / 1000, 2), sec: Math.round((end - start) / 1000), splits, series, route: slimRoute(route) }
+  const out = { v: DETAILS_V, km: round(totalM / 1000, 2), sec: Math.round((end - start) / 1000), splits, series, route: slimRoute(route) }
   const gain = elev.length ? elev.reduce((a, x) => a + x[2], 0) : alts.length ? climbed(alts.map(x => x[1])) : null
   if (gain != null) out.gain = Math.round(gain)
   if (steps.length) out.spm = Math.round(sumOver(steps, start, end) / ((end - start) / 60000))
   if (consent) out.routeConsent = true
   return out
+}
+
+/**
+ * A pace curve without the moments spent stopped: the seconds between stopping and ending the
+ * workout on the watch, or a wait at a crossing, read as a pace several times the run's own and
+ * flatten the rest of the curve against them. Over 1.6 times the median, it is left out.
+ */
+export function withoutStops(pace) {
+  const xs = pace.filter(x => x != null).sort((a, b) => a - b)
+  if (xs.length < 5) return pace
+  const med = xs[Math.floor(xs.length / 2)]
+  return pace.map(x => (x != null && x > med * 1.6 ? null : x))
 }
 
 /** Seconds per km as "5:42". */

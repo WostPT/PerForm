@@ -43,6 +43,11 @@ describe('PerformRunDetails', () => {
     expect(host.querySelectorAll('polyline')).toHaveLength(2)
   })
 
+  it('the pace curve leaves out the stand-still at the end', () => {
+    mount(w({ v: 1, km: 4.87, sec: 2053, splits: [], series: { t: [0, 1, 2, 3, 4, 5], pace: [420, 400, 410, 415, 405, 1035] } }))
+    expect(host.textContent).not.toContain('17:15')
+  })
+
   it('nothing for a workout without details', () => {
     mount(w(undefined))
     expect(host.textContent).toBe('')

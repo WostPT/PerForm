@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { dateLocale, t } from '../lib/i18n.js'
 import { MOBILE } from '../lib/mobile.js'
-import { fmtPace, routePath } from '../lib/perform-run-details.js'
+import { fmtPace, routePath, withoutStops } from '../lib/perform-run-details.js'
 import { askRoute } from '../lib/perform-health-read.js'
 import { Button } from './ui.jsx'
 
@@ -47,7 +47,7 @@ export default function PerformRunDetails({ w, toast }) {
   const live = useStore(s => (s.S.workouts || []).find(x => x?.id === w?.id)) || w
   const [busy, setBusy] = useState(false)
   const d = live?.details
-  if (!d || d.none || d.v !== 1) return null
+  if (!d || d.none || !(d.v >= 1)) return null
   const s = d.series || {}
   const avgPace = d.km > 0 ? d.sec / d.km : null
   const showRoute = async () => {
@@ -88,7 +88,7 @@ export default function PerformRunDetails({ w, toast }) {
         </tr>
       })}</tbody>
     </table>}
-    {s.pace && <Curve label={t('Pace')} values={s.pace} t={s.t} fmt={v => `${fmtPace(v)} /km`} color="var(--blue)" invert />}
+    {s.pace && <Curve label={t('Pace')} values={withoutStops(s.pace)} t={s.t} fmt={v => `${fmtPace(v)} /km`} color="var(--blue)" invert />}
     {s.hr && <Curve label={t('Heart rate')} values={s.hr} t={s.t} fmt={v => `${Math.round(v)} bpm`} color="var(--red)" />}
     {s.alt && <Curve label={t('Altitude')} values={s.alt} t={s.t} fmt={v => `${Math.round(v)} m`} color="var(--green)" />}
     {s.t?.length > 0 && <div className="small dim" style={{ marginTop: 6 }}>{mmss(0)} – {mmss(d.sec)}</div>}
