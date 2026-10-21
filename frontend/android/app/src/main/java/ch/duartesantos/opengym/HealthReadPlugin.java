@@ -10,19 +10,25 @@ import androidx.health.connect.client.PermissionController;
 import androidx.health.connect.client.aggregate.AggregateMetric;
 import androidx.health.connect.client.aggregate.AggregationResult;
 import androidx.health.connect.client.aggregate.AggregationResultGroupedByPeriod;
+import androidx.health.connect.client.contracts.ExerciseRouteRequestContract;
 import androidx.health.connect.client.records.DistanceRecord;
+import androidx.health.connect.client.records.ElevationGainedRecord;
+import androidx.health.connect.client.records.ExerciseRoute;
+import androidx.health.connect.client.records.ExerciseRouteResult;
 import androidx.health.connect.client.records.ExerciseSessionRecord;
 import androidx.health.connect.client.records.HeartRateRecord;
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord;
 import androidx.health.connect.client.records.Record;
 import androidx.health.connect.client.records.RestingHeartRateRecord;
 import androidx.health.connect.client.records.SleepSessionRecord;
+import androidx.health.connect.client.records.SpeedRecord;
 import androidx.health.connect.client.records.StepsRecord;
 import androidx.health.connect.client.records.WeightRecord;
 import androidx.health.connect.client.records.metadata.Metadata;
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest;
 import androidx.health.connect.client.request.AggregateRequest;
 import androidx.health.connect.client.request.ReadRecordsRequest;
+import androidx.health.connect.client.response.ReadRecordResponse;
 import androidx.health.connect.client.response.ReadRecordsResponse;
 import androidx.health.connect.client.time.TimeRangeFilter;
 import androidx.health.connect.client.units.Length;
@@ -33,6 +39,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -69,6 +77,8 @@ import kotlinx.coroutines.BuildersKt;
  *   await HR.status();              // { status, granted: ['sleep', …], history }
  *   await HR.requestPermissions();  // { granted: ['sleep', …] }
  *   await HR.read({ since, until }); // { days, sleep, hrv, sessions, weights }
+ *   await HR.details({ id });        // one workout's samples: { route, hr, speed, dist, steps, elev }
+ *   await HR.askRoute({ id });       // Health Connect's own dialog for that workout's route: { route }
  */
 @CapacitorPlugin(name = "HealthRead")
 public class HealthReadPlugin extends Plugin {
@@ -86,7 +96,12 @@ public class HealthReadPlugin extends Plugin {
         PERMISSIONS.put("distance", P + "READ_DISTANCE");
         PERMISSIONS.put("exercise", P + "READ_EXERCISE");
         PERMISSIONS.put("weight", P + "READ_WEIGHT");
+        PERMISSIONS.put("speed", P + "READ_SPEED");
+        PERMISSIONS.put("elevation", P + "READ_ELEVATION_GAINED");
     }
+    // GPS routes: never in the permission dialog. Health Connect grants them only from its own
+    // route dialog (askRoute, which offers "allow all routes") or its settings.
+    private static final String ROUTES = P + "READ_EXERCISE_ROUTES";
     // Without it Health Connect hands out only the 30 days before the first permission was granted.
     private static final String HISTORY = P + "READ_HEALTH_DATA_HISTORY";
 
@@ -150,6 +165,7 @@ public class HealthReadPlugin extends Plugin {
                 r.put("status", "available");
                 r.put("granted", names(g));
                 r.put("history", g.contains(HISTORY));
+                r.put("routes", g.contains(ROUTES));
                 call.resolve(r);
             } catch (Exception e) {
                 call.reject(e.getMessage(), "failed");
@@ -364,5 +380,137 @@ public class HealthReadPlugin extends Plugin {
             out.put(o);
         }
         return out;
+    }
+
+    // One workout in detail, for its splits and curves (lib/perform-run-details.js): its GPS route,
+    // and the heart rate, speed, distance, steps and elevation the same app recorded during it.
+    // Compact arrays, since a run has a sample a second: route [t, lat, lon, alt|null],
+    // hr [t, bpm], speed [t, m/s], dist/steps/elev [start, end, value]. `route` is "consent" when
+    // Health Connect wants the user to allow it first (askRoute), "none" when there is none.
+    @PluginMethod
+    public void details(PluginCall call) {
+        if (!available()) {
+            call.reject("Health Connect is not available", "unavailable");
+            return;
+        }
+        String id = call.getString("id");
+        if (id == null || id.isEmpty()) {
+            call.reject("id is required", "failed");
+            return;
+        }
+        worker.execute(() -> {
+            try {
+                Set<String> g = granted();
+                if (!g.contains(PERMISSIONS.get("exercise"))) {
+                    call.reject("Exercise permission not granted", "permission");
+                    return;
+                }
+                @SuppressWarnings("unchecked")
+                ReadRecordResponse<ExerciseSessionRecord> res = (ReadRecordResponse<ExerciseSessionRecord>) BuildersKt.runBlocking(
+                        EmptyCoroutineContext.INSTANCE,
+                        (scope, cont) -> client().readRecord(JvmClassMappingKt.getKotlinClass(ExerciseSessionRecord.class), id, cont));
+                ExerciseSessionRecord s = res.getRecord();
+                String src = origin(s.getMetadata());
+                Instant a = s.getStartTime(), b = s.getEndTime();
+                JSObject r = new JSObject();
+                r.put("start", a.toEpochMilli());
+                r.put("end", b.toEpochMilli());
+                ExerciseRouteResult rr = s.getExerciseRouteResult();
+                if (rr instanceof ExerciseRouteResult.Data) r.put("route", route(((ExerciseRouteResult.Data) rr).getExerciseRoute()));
+                else if (rr instanceof ExerciseRouteResult.ConsentRequired) r.put("route", "consent");
+                else r.put("route", "none");
+                JSONArray hr = new JSONArray();
+                if (g.contains(PERMISSIONS.get("heart"))) {
+                    for (HeartRateRecord h : readAll(HeartRateRecord.class, a, b)) {
+                        if (!src.equals(origin(h.getMetadata()))) continue;
+                        for (HeartRateRecord.Sample x : h.getSamples()) {
+                            if (x.getTime().isBefore(a) || x.getTime().isAfter(b)) continue;
+                            hr.put(new JSONArray().put(x.getTime().toEpochMilli()).put(x.getBeatsPerMinute()));
+                        }
+                    }
+                }
+                r.put("hr", hr);
+                JSONArray speed = new JSONArray();
+                if (g.contains(PERMISSIONS.get("speed"))) {
+                    for (SpeedRecord v : readAll(SpeedRecord.class, a, b)) {
+                        if (!src.equals(origin(v.getMetadata()))) continue;
+                        for (SpeedRecord.Sample x : v.getSamples()) {
+                            if (x.getTime().isBefore(a) || x.getTime().isAfter(b)) continue;
+                            speed.put(new JSONArray().put(x.getTime().toEpochMilli()).put(x.getSpeed().getMetersPerSecond()));
+                        }
+                    }
+                }
+                r.put("speed", speed);
+                JSONArray dist = new JSONArray();
+                if (g.contains(PERMISSIONS.get("distance"))) {
+                    for (DistanceRecord d : readAll(DistanceRecord.class, a, b)) {
+                        if (!src.equals(origin(d.getMetadata()))) continue;
+                        dist.put(new JSONArray().put(d.getStartTime().toEpochMilli()).put(d.getEndTime().toEpochMilli()).put(d.getDistance().getMeters()));
+                    }
+                }
+                r.put("dist", dist);
+                JSONArray steps = new JSONArray();
+                if (g.contains(PERMISSIONS.get("steps"))) {
+                    for (StepsRecord st : readAll(StepsRecord.class, a, b)) {
+                        if (!src.equals(origin(st.getMetadata()))) continue;
+                        steps.put(new JSONArray().put(st.getStartTime().toEpochMilli()).put(st.getEndTime().toEpochMilli()).put(st.getCount()));
+                    }
+                }
+                r.put("steps", steps);
+                JSONArray elev = new JSONArray();
+                if (g.contains(PERMISSIONS.get("elevation"))) {
+                    for (ElevationGainedRecord e : readAll(ElevationGainedRecord.class, a, b)) {
+                        if (!src.equals(origin(e.getMetadata()))) continue;
+                        elev.put(new JSONArray().put(e.getStartTime().toEpochMilli()).put(e.getEndTime().toEpochMilli()).put(e.getElevation().getMeters()));
+                    }
+                }
+                r.put("elev", elev);
+                call.resolve(r);
+            } catch (SecurityException e) {
+                call.reject(e.getMessage(), "permission");
+            } catch (Exception e) {
+                call.reject(e.getMessage(), "failed");
+            }
+        });
+    }
+
+    private static JSONArray route(ExerciseRoute route) throws org.json.JSONException {
+        JSONArray out = new JSONArray();
+        for (ExerciseRoute.Location l : route.getRoute()) {
+            JSONArray p = new JSONArray().put(l.getTime().toEpochMilli()).put(l.getLatitude()).put(l.getLongitude());
+            p.put(l.getAltitude() != null ? (Object) l.getAltitude().getMeters() : JSONObject.NULL);
+            out.put(p);
+        }
+        return out;
+    }
+
+    // Health Connect's dialog for one workout's route, where the user can also allow every route
+    // from then on. Resolves with the route, or route: null when it was not allowed or there is none.
+    @PluginMethod
+    public void askRoute(PluginCall call) {
+        if (!available()) {
+            call.reject("Health Connect is not available", "unavailable");
+            return;
+        }
+        String id = call.getString("id");
+        if (id == null || id.isEmpty()) {
+            call.reject("id is required", "failed");
+            return;
+        }
+        Intent intent = new ExerciseRouteRequestContract().createIntent(getContext(), id);
+        startActivityForResult(call, intent, "routeResult");
+    }
+
+    @ActivityCallback
+    private void routeResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        try {
+            ExerciseRoute route = new ExerciseRouteRequestContract().parseResult(result.getResultCode(), result.getData());
+            JSObject r = new JSObject();
+            r.put("route", route != null ? route(route) : JSONObject.NULL);
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject(e.getMessage(), "failed");
+        }
     }
 }

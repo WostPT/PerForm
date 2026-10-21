@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // (HealthReadPlugin.java), the app's data directory and the store are played in memory.
 const h = vi.hoisted(() => {
   vi.stubEnv('VITE_MOBILE', '1')
-  return { files: new Map(), calls: [], status: { status: 'available', granted: [] }, grant: ['sleep', 'weight'], reading: {}, fail: null }
+  return { files: new Map(), calls: [], status: { status: 'available', granted: [] }, grant: ['sleep', 'weight'], reading: {}, fail: null, details: null }
 })
 
 vi.mock('@capacitor/filesystem', () => ({
@@ -29,6 +29,11 @@ vi.mock('@capacitor/core', () => ({
       if (h.fail) throw Object.assign(new Error('refused'), { code: h.fail })
       return h.reading
     },
+    details: async arg => {
+      h.calls.push(['details', arg])
+      if (!h.details) throw Object.assign(new Error('not there'), { code: 'UNIMPLEMENTED' })
+      return h.details
+    },
   }),
 }))
 
@@ -37,11 +42,11 @@ const day = (iso, hh) => new Date(`${iso}T${String(hh).padStart(2, '0')}:00:00`)
 const reads = () => h.calls.filter(c => c[0] === 'read')
 
 let hr, S, ready
-const store = { update: fn => { const next = structuredClone(S); fn(next); S = next }, ready: () => ready }
+const store = { update: fn => { const next = structuredClone(S); fn(next); S = next }, ready: () => ready, state: () => S }
 beforeEach(async () => {
   vi.resetModules()
   vi.useRealTimers()
-  h.files.clear(); h.calls = []; h.status = { status: 'available', granted: [] }; h.grant = ['sleep', 'weight']; h.fail = null
+  h.files.clear(); h.calls = []; h.status = { status: 'available', granted: [] }; h.grant = ['sleep', 'weight']; h.fail = null; h.details = null
   h.reading = {}
   S = { unit: 'kg', bodyweight: [] }
   ready = true
@@ -83,6 +88,25 @@ describe('turning it on', () => {
     await hr.enableHealthRead()
     expect(S.workouts).toEqual([expect.objectContaining({ id: 'hc-r1', src: 'health-connect', entries: [expect.objectContaining({ id: '0685' })] })])
     expect(S.health.imported).toEqual(['r1'])
+  })
+
+  it('reads the run\'s details once, and keeps them on the workout', async () => {
+    const end = Date.now() - 3600000, start = end - 30 * 60000
+    h.reading = { sessions: [{ id: 'r1', start, end, type: 56, m: 5000 }] }
+    h.details = { start, end, route: 'none', dist: [[start, end, 5000]], hr: [[start + 60000, 150]] }
+    await hr.enableHealthRead()
+    expect(h.calls.filter(c => c[0] === 'details')).toEqual([['details', { id: 'r1' }]])
+    expect(S.workouts[0].details).toMatchObject({ v: 1, km: 5, splits: [{ km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }] })
+    await hr.readHealthNow({ force: true })
+    expect(h.calls.filter(c => c[0] === 'details')).toHaveLength(1)
+  })
+
+  it('an older APK without details still reads the rest', async () => {
+    const end = Date.now() - 3600000
+    h.reading = { sessions: [{ id: 'r1', start: end - 30 * 60000, end, type: 56, m: 5000 }] }
+    const out = await hr.enableHealthRead()
+    expect(out.ok).toBe(true)
+    expect(S.workouts[0].details).toBeUndefined()
   })
 
   it('stays off when nothing is granted', async () => {

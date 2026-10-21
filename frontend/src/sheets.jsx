@@ -68,6 +68,7 @@ import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
 import { watchGlyph, watchRowParts } from './lib/perform-watch-workouts.js'   // PerForm
+import PerformRunDetails from './components/PerformRunDetails.jsx'   // PerForm
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -2545,6 +2546,7 @@ function WorkoutDetail({ w, close }) {
         {entryRows(g.units)}
       </div>
     }) : entryRows(groups[0]?.units || [])}
+    <PerformRunDetails w={w} toast={toast} />{/* PerForm: a watch workout's route, splits and curves */}
     {/* Progress photos and form-check videos: added and removed right here, on the saved record. */}
     <WorkoutMediaSection w={w} />
     <div className="small muted" style={{ margin: '4px 0 6px' }}>{t('Session note')}</div>
