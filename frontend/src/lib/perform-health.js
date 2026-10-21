@@ -11,7 +11,8 @@
 //     sleep:    [{ id, d, start, end, asleep, deep, light, rem, awake, src }],   // minutes; d = the day woken up on
 //     sessions: [{ id, d, start, end, type, title, hrAvg, hrMax, steps, km, src }],   // workouts recorded on the watch
 //     weights:  [{ id, d, time, kg, src }],   // weigh-ins, with the time they were taken
-//     imported: [id],   // weigh-ins already copied into S.bodyweight, so a deleted one stays deleted
+//     imported: [id],   // weigh-ins copied into S.bodyweight and workouts into S.workouts
+//                       // (lib/perform-watch-workouts.js), so a deleted one stays deleted
 //   }
 import { isoOf } from './format.js'
 
@@ -189,8 +190,8 @@ export function mergeReading(prev, reading, { since, until, now = Date.now() }) 
     sleep: keep(sleep), sessions: keep(sessions), weights: keep(weights),
     imported: h.imported,
   }
-  // Ids of weigh-ins that left the log are of no more use.
-  const live = new Set(out.weights.map(w => w.id))
+  // Ids of weigh-ins and workouts that left the log are of no more use.
+  const live = new Set([...out.weights, ...out.sessions].map(x => x.id))
   out.imported = h.imported.filter(id => live.has(id))
   return out
 }
