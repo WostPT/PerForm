@@ -11,7 +11,7 @@
 import { MOBILE, isAndroid, readJsonFile, writeJsonFile } from './mobile.js'
 import { mergeReading, readWindow, weighInsToAdd } from './perform-health.js'
 import { applyWatchWorkouts, isWatchWorkout } from './perform-watch-workouts.js'
-import { runDetails } from './perform-run-details.js'
+import { DETAILS_V, runDetails } from './perform-run-details.js'
 
 export const HEALTH_READ_FILE = 'perform-health-read.json'
 const OFF = { on: false, at: 0, error: null, granted: [], history: false }
@@ -72,7 +72,7 @@ function apply(reading, since, until) {
 }
 
 // Details (route, splits, curves: lib/perform-run-details.js) for the watch workouts that have
-// none yet, a few per reading so a first reading of months of runs does not hold the app up. One
+// none yet or an older version of them, a few per reading so a first reading of months of runs does not hold the app up. One
 // whose route waits on the user's say-so is read again once every route is allowed. A session
 // Health Connect would not give is tried once a launch; an APK from before details stops it all.
 const DETAILS_PER_READ = 25
@@ -82,7 +82,7 @@ export const sessionIdOf = w => String(w.id).replace(/^hc-/, '')
 async function readDetails(p, routes) {
   const S = store.state ? store.state() : null
   const todo = (S?.workouts || []).filter(w => isWatchWorkout(w) && !triedDetails.has(w.id) &&
-    (!w.details || (w.details.routeConsent && routes))).slice(0, DETAILS_PER_READ)
+    (!w.details || w.details.v !== DETAILS_V || (w.details.routeConsent && routes))).slice(0, DETAILS_PER_READ)
   const got = {}
   for (const w of todo) {
     triedDetails.add(w.id)

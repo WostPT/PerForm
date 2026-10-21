@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distanceTrack, fmtPace, haversine, routePath, runDetails } from './perform-run-details.js'
+import { DETAILS_V, distanceTrack, fmtPace, haversine, routePath, runDetails, withoutStops } from './perform-run-details.js'
 
 // PerForm: a watch workout's samples worked down to splits, curves and a slimmed route.
 const T0 = new Date('2026-10-21T07:00:00').getTime()
@@ -84,8 +84,22 @@ describe('runDetails', () => {
   })
 
   it('nothing to show when Health Connect had nothing', () => {
-    expect(runDetails({ start: T0, end: T1, route: 'none', hr: [], speed: [], dist: [], steps: [], elev: [] }, W)).toEqual({ v: 1, none: true })
-    expect(runDetails(null, {})).toEqual({ v: 1, none: true })
+    expect(runDetails({ start: T0, end: T1, route: 'none', hr: [], speed: [], dist: [], steps: [], elev: [] }, W)).toEqual({ v: DETAILS_V, none: true })
+    expect(runDetails(null, {})).toEqual({ v: DETAILS_V, none: true })
+  })
+
+  it('the splits add up to the distance the watch gave, not the records summed', () => {
+    // Health Connect's total for the 21 October run was 4.87 km; its records summed to 4.89.
+    const raw = { start: T0, end: T1, route: 'none', dist: [[T0, T1, 4890]] }
+    const d = runDetails(raw, { ...W, watch: { km: 4.87 } })
+    expect(d.km).toBe(4.87)
+    expect(d.splits.reduce((a, x) => a + x.km, 0)).toBeCloseTo(4.87, 2)
+  })
+
+  it('the seconds after stopping are left out of the pace curve', () => {
+    const raw = { start: T0, end: T1, route: 'none', speed: [...Array.from({ length: 200 }, (_, i) => [T0 + i * 10000, V]), [T1 - 20000, 0.97], [T1, 0.97]] }
+    const d = runDetails(raw, W)
+    expect(Math.max(...d.series.pace.filter(x => x != null))).toBeLessThan(500)
   })
 
   it('a stop at a crossing does not turn into a pace', () => {
@@ -104,6 +118,11 @@ describe('helpers', () => {
     const tr = distanceTrack({ route: [], dist: [[0, 10, 50], [10, 20, 50]], speed: [] }, 0)
     expect(tr[tr.length - 1][1]).toBe(100)
     for (let i = 1; i < tr.length; i++) expect(tr[i][1]).toBeGreaterThanOrEqual(tr[i - 1][1])
+  })
+
+  it('withoutStops keeps the run and drops the stand-still', () => {
+    expect(withoutStops([420, 410, 400, 415, 405, 1030, null])).toEqual([420, 410, 400, 415, 405, null, null])
+    expect(withoutStops([420, 1030])).toEqual([420, 1030])
   })
 
   it('pace as m:ss', () => {

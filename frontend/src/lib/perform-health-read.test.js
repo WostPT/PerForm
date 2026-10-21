@@ -96,9 +96,22 @@ describe('turning it on', () => {
     h.details = { start, end, route: 'none', dist: [[start, end, 5000]], hr: [[start + 60000, 150]] }
     await hr.enableHealthRead()
     expect(h.calls.filter(c => c[0] === 'details')).toEqual([['details', { id: 'r1' }]])
-    expect(S.workouts[0].details).toMatchObject({ v: 1, km: 5, splits: [{ km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }] })
+    expect(S.workouts[0].details).toMatchObject({ v: 2, km: 5, splits: [{ km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }, { km: 1 }] })
     await hr.readHealthNow({ force: true })
     expect(h.calls.filter(c => c[0] === 'details')).toHaveLength(1)
+  })
+
+  it('reads the details again when they were worked out by an older version', async () => {
+    const end = Date.now() - 3600000, start = end - 30 * 60000
+    h.reading = { sessions: [{ id: 'r1', start, end, type: 56, m: 5000 }] }
+    h.details = { start, end, route: 'none', dist: [[start, end, 5000]] }
+    await hr.enableHealthRead()
+    S.workouts[0].details = { v: 1, km: 5.02, splits: [] }
+    vi.resetModules()
+    hr = await import('./perform-health-read.js')
+    hr.initHealthRead(store)
+    await hr.readHealthNow({ force: true })
+    expect(S.workouts[0].details).toMatchObject({ v: 2, km: 5 })
   })
 
   it('an older APK without details still reads the rest', async () => {
