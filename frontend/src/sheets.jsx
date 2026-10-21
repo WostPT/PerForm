@@ -61,6 +61,7 @@ import { moveWorkout, sameWorkout, startTimeOf, durationMinOf, setWorkoutDuratio
 import { editCompletedSession, editLeftEmpty, editedRecord, editChangesNothing } from './lib/session-edit.js'
 import { stampWorkout } from './lib/sync-merge.js'
 import { weeklyWeights } from './lib/bodyweight.js'
+import { atFrom, weighInTime } from './lib/perform-weighins.js'
 import { workoutText } from './lib/workout-text.js'
 import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, CARD_FONT } from './lib/workout-card.js'
 import { copyText } from './lib/clipboard.js'
@@ -297,6 +298,8 @@ function BwSheet({ required, onDone, close }) {
   const unit = st.unit
   const bw = lastBW(st)
   const [v, setV] = useState(bw ? bw.w : 70)
+  // PerForm: when it was taken, now by default; cleared, the weigh-in is saved with no time.
+  const [time, setTime] = useState(() => weighInTime({ at: Date.now() }))
   const save = () => {
     const n = Math.round((v || 0) * 10) / 10
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
@@ -304,7 +307,12 @@ function BwSheet({ required, onDone, close }) {
     update(s => {
       const iso = todayISO()
       const ex = s.bodyweight.find(b => b.d === iso)
+      const at = required ? Date.now() : atFrom(iso, time)
       if (ex) { ex.w = n; ex.t = Date.now() } else s.bodyweight.push({ d: iso, w: n, t: Date.now() })
+      // typed over the scale's copy, it is the app's own weigh-in now (perform-health.js)
+      const e = ex || s.bodyweight[s.bodyweight.length - 1]
+      delete e.src
+      if (at) e.at = at; else delete e.at
       s.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1))
     })
     close()
@@ -326,6 +334,10 @@ function BwSheet({ required, onDone, close }) {
       : <h3>{t('Log body weight')}</h3>}
     <div className="muted small">{required ? t('Slide or tap to set your weight. We ask before every workout so your curve stays honest.') : t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
     <WeightInput value={v} setValue={setV} unit={unit} />
+    {!required && <div className="row between" style={{ margin: '4px 2px 0' }}>
+      <span className="small muted">{t('Time weighed')}</span>
+      <input type="time" className="timef" value={time} onChange={e => setTime(e.target.value)} aria-label={t('Time weighed')} />
+    </div>}
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{required ? t('Save & start workout') : t('Save')}</Button>
     {required && <>
@@ -359,7 +371,7 @@ function WeighInRow({ b, unit, confirm = false }) {
     confirmText: t('Delete'), danger: true, onConfirm: delEntry,
   })
   return <div className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
-    <span className="small muted">{fmtDate(b.d, true)}</span>
+    <span className="small muted">{fmtDate(b.d, true)}{weighInTime(b) && ' · ' + weighInTime(b)}</span>
     <span className="row" style={{ gap: 12 }}><b>{fmtNum(b.w)} {unit}</b>
       <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--red)' }} onClick={confirm ? ask : delEntry} aria-label={t('Delete weigh-in')}><Icon name="trash" /></button></span>
   </div>
