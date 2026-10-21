@@ -10,6 +10,7 @@
 // most once every few minutes on its own. The web build never gets here (MOBILE).
 import { MOBILE, isAndroid, readJsonFile, writeJsonFile } from './mobile.js'
 import { mergeReading, readWindow, weighInsToAdd } from './perform-health.js'
+import { applyWatchWorkouts } from './perform-watch-workouts.js'
 
 export const HEALTH_READ_FILE = 'perform-health-read.json'
 const OFF = { on: false, at: 0, error: null, granted: [], history: false }
@@ -54,7 +55,8 @@ export async function healthReadStatus() {
 // files that import this one).
 let store = null
 
-// The new S.health and the scale's weigh-ins for days the weight log has none of, in one change.
+// The new S.health, the scale's weigh-ins for days the weight log has none of and the watch's
+// workouts, in one change.
 function apply(reading, since, until) {
   store.update(s => {
     const now = Date.now()
@@ -64,6 +66,7 @@ function apply(reading, since, until) {
       s.bodyweight = [...(s.bodyweight || []), ...add].sort((a, b) => (a.d < b.d ? -1 : 1))
       s.health.imported = [...s.health.imported, ...ids]
     }
+    applyWatchWorkouts(s, now)
   })
 }
 

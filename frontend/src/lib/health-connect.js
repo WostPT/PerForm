@@ -51,6 +51,8 @@ function sessionNotes(w, opts) {
 export function sessionRecord(w, { unit, nameOf, speedUnit }) {
   const start = Number(w?.start), end = Number(w?.end)
   if (!w?.id || !(start > 0) || !(end > start)) return null
+  // PerForm: a workout made from a watch session (lib/perform-watch-workouts.js) is already there.
+  if (w.src) return null
   return {
     id: 'opengym-w-' + w.id,
     start, end,

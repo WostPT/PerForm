@@ -77,6 +77,14 @@ describe('turning it on', () => {
     expect(file()).toMatchObject({ on: true, error: null, granted: ['sleep', 'weight'] })
   })
 
+  it('logs the watch\'s run as a workout', async () => {
+    const end = Date.now() - 3600000
+    h.reading = { sessions: [{ id: 'r1', start: end - 30 * 60000, end, type: 56, m: 5000 }] }
+    await hr.enableHealthRead()
+    expect(S.workouts).toEqual([expect.objectContaining({ id: 'hc-r1', src: 'health-connect', entries: [expect.objectContaining({ id: '0685' })] })])
+    expect(S.health.imported).toEqual(['r1'])
+  })
+
   it('stays off when nothing is granted', async () => {
     h.grant = []
     expect(await hr.enableHealthRead()).toEqual({ ok: false, reason: 'denied' })
