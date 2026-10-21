@@ -10,7 +10,8 @@
 // most once every few minutes on its own. The web build never gets here (MOBILE).
 import { MOBILE, isAndroid, readJsonFile, writeJsonFile } from './mobile.js'
 import { mergeReading, readWindow, weighInsToAdd } from './perform-health.js'
-import { applyWatchWorkouts } from './perform-watch-workouts.js'
+import { applyWatchWorkouts, isWatchWorkout } from './perform-watch-workouts.js'
+import { runDetails } from './perform-run-details.js'
 
 export const HEALTH_READ_FILE = 'perform-health-read.json'
 const OFF = { on: false, at: 0, error: null, granted: [], history: false }
@@ -70,6 +71,50 @@ function apply(reading, since, until) {
   })
 }
 
+// Details (route, splits, curves: lib/perform-run-details.js) for the watch workouts that have
+// none yet, a few per reading so a first reading of months of runs does not hold the app up. One
+// whose route waits on the user's say-so is read again once every route is allowed. A session
+// Health Connect would not give is tried once a launch; an APK from before details stops it all.
+const DETAILS_PER_READ = 25
+const triedDetails = new Set()
+export const sessionIdOf = w => String(w.id).replace(/^hc-/, '')
+
+async function readDetails(p, routes) {
+  const S = store.state ? store.state() : null
+  const todo = (S?.workouts || []).filter(w => isWatchWorkout(w) && !triedDetails.has(w.id) &&
+    (!w.details || (w.details.routeConsent && routes))).slice(0, DETAILS_PER_READ)
+  const got = {}
+  for (const w of todo) {
+    triedDetails.add(w.id)
+    try {
+      got[w.id] = runDetails(await p.HR.details({ id: sessionIdOf(w) }), w)
+    } catch (e) {
+      if (e?.code === 'UNIMPLEMENTED' || e?.code === 'permission') break
+    }
+  }
+  if (Object.keys(got).length) store.update(s => {
+    for (const rec of s.workouts || []) if (got[rec?.id]) rec.details = got[rec.id]
+  })
+}
+
+/**
+ * Health Connect's own dialog for one workout's route (it can allow every route from then on),
+ * then the workout's details read again with it. Resolves with true when the route came.
+ */
+export async function askRoute(w) {
+  const p = await plugin()
+  if (!p || !store) return false
+  const asked = await p.HR.askRoute({ id: sessionIdOf(w) })
+  if (!Array.isArray(asked?.route) || !asked.route.length) return false
+  const raw = await p.HR.details({ id: sessionIdOf(w) }).catch(() => ({ start: w.start, end: w.end }))
+  const details = runDetails(raw, w, asked.route)
+  store.update(s => {
+    const rec = (s.workouts || []).find(x => x?.id === w.id)
+    if (rec) rec.details = details
+  })
+  return true
+}
+
 let running = null
 /**
  * Reads what is new since the last time and folds it into the log. `force` reads even when the
@@ -99,6 +144,7 @@ export function readHealthNow({ force = false } = {}) {
         const reading = await p.HR.read({ since, until })
         apply(reading, since, until)
         out = { ...out, at: until, error: null }
+        await readDetails(p, !!st.routes)
       }
     } catch (e) {
       out.error = e?.code === 'permission' ? 'permission' : e?.code === 'unavailable' ? 'unavailable' : 'failed'
@@ -149,7 +195,10 @@ export async function askHealthReadAgain() {
 }
 
 let started = false
-/** From the store, once: `api` is { update, ready } — its change function, and whether it has loaded. */
+/**
+ * From the store, once: `api` is { update, ready, state } — its change function, whether it has
+ * loaded, and the state now.
+ */
 export function initHealthRead(api) {
   if (!MOBILE || started) return
   started = true

@@ -12,7 +12,7 @@ import { openHealthConnect } from '../lib/health-sync.js'
 // PerForm, Settings on the Android app: reading sleep, heart rate, HRV, steps, workouts and
 // weigh-ins from Health Connect (lib/perform-health-read.js). Out of the way on a phone without
 // Health Connect; the writing card above (HealthConnectCard) points to installing it.
-const ALL = ['sleep', 'heart', 'rhr', 'hrv', 'steps', 'distance', 'exercise', 'weight']
+const ALL = ['sleep', 'heart', 'rhr', 'hrv', 'steps', 'distance', 'exercise', 'weight', 'speed', 'elevation']
 
 export default function PerformHealthCard({ toast }) {
   const nav = useNavigate()
