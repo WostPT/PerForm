@@ -96,6 +96,29 @@ describe('runDetails', () => {
     expect(d.splits.reduce((a, x) => a + x.km, 0)).toBeCloseTo(4.87, 2)
   })
 
+  it('the seconds stood still before stopping the watch do not slow the last split', () => {
+    // The 21 October run: running at an even pace, then about 30 s standing before the watch was
+    // stopped. Counted as running, those 30 s made the last 0.89 km read 7:26 instead of ~6:57.
+    const raw = rawRun()
+    const last = raw.route[raw.route.length - 1]
+    for (let s = 5; s <= 30; s += 5) raw.route.push([T1 + s * 1000, last[1] + (s % 10 ? 0.000002 : 0), last[2], last[3]])
+    const d = runDetails({ ...raw, end: T1 + 30000 }, { ...W, end: T1 + 30000 })
+    const lastSplit = d.splits[d.splits.length - 1]
+    expect(Math.abs(lastSplit.sec / lastSplit.km - 417)).toBeLessThanOrEqual(3)
+    // The workout's own time, which the average pace is worked from, keeps the stand-still.
+    expect(d.sec).toBe(MIN * 60 + 30)
+  })
+
+  it('a wait at a crossing is left out of that km, from the watch\'s speed', () => {
+    // 1 km at 2.5 m/s with a 60 s stop half way.
+    const speed = []
+    for (let s = 0; s <= 460; s += 5) speed.push([T0 + s * 1000, s > 200 && s < 260 ? 0 : 2.5])
+    const raw = { start: T0, end: T0 + 460000, route: 'none', speed }
+    const d = runDetails(raw, { start: T0, end: T0 + 460000 })
+    expect(d.splits[0].sec).toBeGreaterThanOrEqual(395)
+    expect(d.splits[0].sec).toBeLessThanOrEqual(410)
+  })
+
   it('the seconds after stopping are left out of the pace curve', () => {
     const raw = { start: T0, end: T1, route: 'none', speed: [...Array.from({ length: 200 }, (_, i) => [T0 + i * 10000, V]), [T1 - 20000, 0.97], [T1, 0.97]] }
     const d = runDetails(raw, W)
