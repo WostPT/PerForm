@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
+import { rollingAverage, weighInTime } from '../lib/perform-weighins.js'
 import { effectiveRoutines, effectiveRoutineIds, nextTrainingDay, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekStartOf, weekDayOffset, DAYS, DAYN } from '../lib/format.js'
 import { t, tn, dateLocale } from '../lib/i18n.js'
@@ -39,6 +40,8 @@ export default function Home() {
   const bw = lastBW(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
+  // PerForm: the mean of the last 7 days up to the latest weigh-in, once it averages more than one
+  const avg7 = bw ? rollingAverage(S.bodyweight, bw.d) : null
 
   const ws = weekStartOf(S)
   // The first day of the shown week. Named for the role, not for Monday — which day that is
@@ -205,8 +208,9 @@ export default function Home() {
               {fmtNum(Math.abs(delta))}
             </span>
           )}
-          <span className="dim small" style={{ marginInlineStart: 'auto' }}>{fmtDate(bw.d, true)}</span>
+          <span className="dim small" style={{ marginInlineStart: 'auto' }}>{fmtDate(bw.d, true)}{weighInTime(bw) && ' · ' + weighInTime(bw)}</span>
         </div>
+        {avg7?.n > 1 && <div className="small muted">{t('7-day average {0}', fmtNum(avg7.avg) + ' ' + S.unit)}</div>}
         {S.targetW && (
           <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />
