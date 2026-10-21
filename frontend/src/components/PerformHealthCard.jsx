@@ -7,6 +7,7 @@ import {
   healthReadStatus, loadHealthRead, enableHealthRead, disableHealthRead, readHealthNow,
   askHealthReadAgain, onHealthReadChange,
 } from '../lib/perform-health-read.js'
+import { openHealthConnect } from '../lib/health-sync.js'
 
 // PerForm, Settings on the Android app: reading sleep, heart rate, HRV, steps, workouts and
 // weigh-ins from Health Connect (lib/perform-health-read.js). Out of the way on a phone without
@@ -24,7 +25,21 @@ export default function PerformHealthCard({ toast }) {
     const off = onHealthReadChange(f => { if (!gone) setH(f) })
     return () => { gone = true; off() }
   }, [])
-  if (!st || !h || st.status !== 'available') return null
+  if (!st || !h) return null
+  // Never hidden on the Android app: a phone where reading cannot work says why, rather than the
+  // section going missing (the plugin absent from an older APK reads as 'unsupported').
+  if (st.status !== 'available') return (
+    <Section title={t('Watch data')}>
+      <Row icon="heart" iconTint="var(--pink)" title={t('Read from Health Connect')}
+        subtitle={st.status === 'missing'
+          ? t('Install or update Health Connect to read your watch data.')
+          : st.status === 'error'
+            ? t('Health Connect did not answer: {0}', st.message || '?')
+            : t('This version of the app cannot read Health Connect. Install the latest APK.')}
+        accessory={st.status === 'missing' ? 'chevron' : 'none'}
+        onClick={st.status === 'missing' ? () => openHealthConnect().catch(() => {}) : undefined} />
+    </Section>
+  )
 
   const run = async fn => {
     setBusy(true)
