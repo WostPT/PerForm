@@ -96,9 +96,25 @@ installs but may need an uninstall before each update.
 
 ## AI coach (optional)
 
-As the admin: **Settings → Account → Admin dashboard → AI Coach**, pick **Anthropic API** and paste
-an API key from [console.anthropic.com](https://console.anthropic.com). Details in
-[AI_COACH.md](AI_COACH.md).
+Two ways to pay for it. Switching between them later keeps the Coach's history, which lives on
+the server per profile. Details in [AI_COACH.md](AI_COACH.md).
+
+**On a Claude subscription (Pro/Max), no extra bill.** Runs come out of the subscription's usage
+limits. It needs the api image with Claude in it, running as root so it can start Claude as a
+locked-down user (`deploy/homelab/compose.coach.yml`):
+
+1. On the server: `~/perform/deploy/homelab/coach-pro.sh on` (rebuilds; the first time takes a few
+   minutes).
+2. On the PC, where Claude Code is signed in: `claude setup-token`, and copy the token it prints.
+3. As the admin: **Settings → Account → Admin dashboard → AI Coach**, pick **Claude (Anthropic)**,
+   **Add CLI token**, paste it, then **Test the Coach** and switch the card on.
+
+The nightly backup still works with the api as root: `backup.sh` writes the archive from a
+throwaway container when it cannot read the files itself.
+
+**With an Anthropic API key, pay per use.** Pick **Anthropic API** on the same card and paste a key
+from [console.anthropic.com](https://console.anthropic.com), with a monthly spend limit set there.
+Then `~/perform/deploy/homelab/coach-pro.sh off` puts the plain image back.
 
 ## Checking on it
 
