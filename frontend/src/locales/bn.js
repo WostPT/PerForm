@@ -2143,6 +2143,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'আপনার ইনটেক উত্তর, সীমাবদ্ধতা বা চোটের বর্ণনা থাকলে সেটাও।',
   'A few preferences': 'কয়েকটি পছন্দ',
   'Your unit, your language and which effort scale you log.': 'আপনার একক, ভাষা আর কোন এফর্ট স্কেলে লগ করেন।',
+  'Sleep and recovery': 'ঘুম ও পুনরুদ্ধার',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'তোমার ঘড়ি থেকে, একই সময়সীমার জন্য: কতক্ষণ ঘুমিয়েছ, বিশ্রামের হৃদস্পন্দন, HRV এবং পদক্ষেপ।',
   'Heavier lifts, lower reps.': 'ভারী লিফট, কম রেপ।',
   'Volume and progression.': 'ভলিউম আর প্রগ্রেশন।',
   'Balanced, sustainable training.': 'ভারসাম্যপূর্ণ, টেকসই ট্রেনিং।',

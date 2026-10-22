@@ -1120,6 +1120,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'Le tue risposte al questionario iniziale, comprese eventuali limitazioni o infortuni che descrivi.',
   'A few preferences': 'Alcune preferenze',
   'Your unit, your language and which effort scale you log.': 'La tua unità, la tua lingua e la scala con cui registri lo sforzo.',
+  'Sleep and recovery': 'Sonno e recupero',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Dal tuo orologio, per lo stesso periodo: quanto hai dormito, frequenza cardiaca a riposo, HRV e passi.',
   'Likes: {0}': 'Piace: {0}',
   'Limits': 'Limiti',
   'Limits: {0}': 'Limiti: {0}',

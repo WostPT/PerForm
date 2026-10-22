@@ -4,7 +4,10 @@ import { dateLocale, t } from '../lib/i18n.js'
 import { MOBILE } from '../lib/mobile.js'
 import { fmtPace, routePath, withoutStops } from '../lib/perform-run-details.js'
 import { askRoute } from '../lib/perform-health-read.js'
+import { fmtTime, hrProfile, isRun, LONGEST, PB_DISTANCES, pbsOf, runLoad, zoneTimes } from '../lib/perform-running.js'
+import PerformZones from './PerformZones.jsx'
 import { Button } from './ui.jsx'
+import Icon from './Icon.jsx'
 
 // PerForm, on a watch workout's detail sheet: its route, splits per km and curves of pace, heart
 // rate and altitude (w.details, lib/perform-run-details.js). The route is drawn as its shape on a
@@ -44,7 +47,8 @@ function Route({ route }) {
 }
 
 export default function PerformRunDetails({ w, toast }) {
-  const live = useStore(s => (s.S.workouts || []).find(x => x?.id === w?.id)) || w
+  const S = useStore(s => s.S)
+  const live = (S.workouts || []).find(x => x?.id === w?.id) || w
   const [busy, setBusy] = useState(false)
   const d = live?.details
   if (!d || d.none || !(d.v >= 1)) return null
@@ -56,16 +60,24 @@ export default function PerformRunDetails({ w, toast }) {
     catch { toast?.(t('Could not read from Health Connect')) }
     setBusy(false)
   }
+  const prof = hrProfile(S)
+  const zones = prof && d.hrs ? zoneTimes(d.hrs, prof.bounds) : null
+  const pbs = pbsOf(S.workouts, live).map(k => k === LONGEST
+    ? t('Longest run: {0} km', fmtKm(d.km || live.watch?.km))
+    : t('New {0} best: {1}', t(PB_DISTANCES.find(x => x.key === k).label), fmtTime(d.best[k])))
+  const load = isRun(live) ? runLoad(live, prof) : null
   const stats = [
     d.km > 0 && [t('Distance'), `${fmtKm(d.km)} km`],
     avgPace && [t('Avg pace'), `${fmtPace(avgPace)} /km`],
     live.watch?.hrAvg && [t('Avg HR'), `${live.watch.hrAvg} bpm`],
     d.gain != null && [t('Climb'), `${d.gain} m`],
     d.spm > 0 && [t('Cadence'), `${d.spm} spm`],
+    load?.load > 0 && [t('Load'), `${load.estimated ? '~' : ''}${load.load}`],
   ].filter(Boolean)
 
   return <div className="card" style={{ margin: '4px 0 14px' }}>
     <div style={{ fontWeight: 600, marginBottom: 10 }}>{t('Advanced details')}</div>
+    {pbs.map(x => <div key={x} className="row" style={{ gap: 6, marginBottom: 8, color: 'var(--yellow)' }}><Icon name="trophy" /><b>{x}</b></div>)}
     {stats.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8, marginBottom: 12 }}>
       {stats.map(([k, v]) => <div key={k}><div className="small muted">{k}</div><b>{v}</b></div>)}
     </div>}
@@ -88,6 +100,7 @@ export default function PerformRunDetails({ w, toast }) {
         </tr>
       })}</tbody>
     </table>}
+    {zones && <div style={{ marginTop: 12 }}><div className="small muted">{t('Heart-rate zones')}</div><PerformZones secs={zones} /></div>}
     {s.pace && <Curve label={t('Pace')} values={withoutStops(s.pace)} t={s.t} fmt={v => `${fmtPace(v)} /km`} color="var(--blue)" invert />}
     {s.hr && <Curve label={t('Heart rate')} values={s.hr} t={s.t} fmt={v => `${Math.round(v)} bpm`} color="var(--red)" />}
     {s.alt && <Curve label={t('Altitude')} values={s.alt} t={s.t} fmt={v => `${Math.round(v)} m`} color="var(--green)" />}

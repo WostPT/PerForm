@@ -1120,6 +1120,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': '시작 질문에 대한 답변. 설명한 제약 사항이나 부상도 포함됩니다.',
   'A few preferences': '몇 가지 설정',
   'Your unit, your language and which effort scale you log.': '단위, 언어, 그리고 강도를 기록하는 척도.',
+  'Sleep and recovery': '수면과 회복',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': '시계에서, 같은 기간 동안: 수면 시간, 안정 시 심박수, HRV, 걸음 수.',
   'Likes: {0}': '좋아함: {0}',
   'Limits': '제한',
   'Limits: {0}': '제한: {0}',

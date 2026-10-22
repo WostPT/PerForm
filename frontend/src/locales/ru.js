@@ -1100,6 +1100,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'Ваши ответы в анкете, включая ограничения и травмы, которые вы описываете.',
   'A few preferences': 'Несколько настроек',
   'Your unit, your language and which effort scale you log.': 'Ваша единица измерения, язык и шкала, по которой вы оцениваете усилие.',
+  'Sleep and recovery': 'Сон и восстановление',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'С твоих часов, за тот же период: сколько ты спал, пульс в покое, ВСР и шаги.',
   'Likes: {0}': 'Нравится: {0}',
   'Limits': 'Ограничения',
   'Limits: {0}': 'Ограничения: {0}',

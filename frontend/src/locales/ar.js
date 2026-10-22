@@ -987,6 +987,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'إجاباتك على أسئلة البداية، بما في ذلك أي قيود أو إصابات تصفها.',
   'A few preferences': 'بعض التفضيلات',
   'Your unit, your language and which effort scale you log.': 'وحدتك ولغتك ومقياس الجهد الذي تسجل به.',
+  'Sleep and recovery': 'النوم والتعافي',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'من ساعتك، للفترة نفسها: مدة نومك ومعدل نبض القلب أثناء الراحة وتقلب معدل ضربات القلب (HRV) والخطوات.',
   'Likes: {0}': 'المفضلات: {0}',
   'Limits': 'القيود',
   'Limits: {0}': 'القيود: {0}',

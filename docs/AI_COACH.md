@@ -259,6 +259,7 @@ renders from, so the screen cannot drift from the payload — are:
 | `profile` | the intake answers you gave the Coach, including any limitations |
 | `cohort` (optional) | only with comparison on and your own opt-in: anonymous medians from the other people sharing — never their data, and never yours to them beyond the same medians |
 | `prefs` | unit, language, effort scale |
+| `recovery` | PerForm: sleep (minutes asleep, deep, REM, awake), resting heart rate, HRV and steps from the watch, over the same window |
 
 A review reads a training block, not a training career: the window is capped at **12 weeks or 60
 sessions**. Your profile is identified by a stable pseudonym that is never the user id and never

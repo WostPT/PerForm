@@ -1120,6 +1120,8 @@ export default {
   'Your intake answers, including any limitations or injuries you describe.': 'Başlangıç sorularına verdiğin yanıtlar; anlattığın kısıtlar ve sakatlıklar da dâhil.',
   'A few preferences': 'Birkaç tercih',
   'Your unit, your language and which effort scale you log.': 'Birimin, dilin ve zorluğu hangi ölçekle kaydettiğin.',
+  'Sleep and recovery': 'Uyku ve toparlanma',
+  'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Saatinden, aynı dönem için: ne kadar uyuduğun, dinlenme nabzı, HRV ve adımlar.',
   'Likes: {0}': 'Sevdikleri: {0}',
   'Limits': 'Sınırlar',
   'Limits: {0}': 'Sınırlar: {0}',
