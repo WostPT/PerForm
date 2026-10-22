@@ -1,0 +1,10 @@
+# The homelab with the AI Coach on a Claude subscription (Pro/Max), switched on and off with
+# deploy/homelab/coach-pro.sh. Added after compose.homelab.yml in COMPOSE_FILE, so it wins.
+#
+# That provider runs Claude inside the api container, and the api only allows it when it can start
+# Claude as the image's locked-down `coach` user (api/coach/adapters/spawn.js), so Claude cannot
+# read the data folder. Switching to another user takes root, so the api runs as root here, as it
+# does in upstream's own compose file. New data files are then root's; backup.sh copes with that.
+services:
+  api:
+    user: "0:0"

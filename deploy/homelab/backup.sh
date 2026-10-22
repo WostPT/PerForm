@@ -7,7 +7,14 @@ DATA=/data/perform/dados
 OUT=/data/perform/copias
 mkdir -p "$OUT"
 name="perform-$(date +%Y-%m-%d_%H%M).tar.gz"
-if ! tar czf "$OUT/$name.part" -C "$DATA" .; then
+# With the Coach on Pro (coach-pro.sh) the api runs as root, and the files it writes then are
+# root's and private (0600): a tar run as wost cannot read them. Docker can, and wost is in the
+# docker group, so the archive is then written from a throwaway container instead.
+in_docker() {
+    docker run --rm -v "$DATA":/d:ro -v "$OUT":/o alpine:3 \
+        sh -c "tar czf '/o/$name.part' -C /d . && chown $(id -u):$(id -g) '/o/$name.part'"
+}
+if ! tar czf "$OUT/$name.part" -C "$DATA" . 2>/dev/null && ! { rm -f "$OUT/$name.part"; in_docker; }; then
     echo "ERROR: the backup archive could not be written." >&2
     rm -f "$OUT/$name.part"
     exit 1
