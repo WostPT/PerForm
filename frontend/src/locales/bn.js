@@ -2145,6 +2145,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'আপনার একক, ভাষা আর কোন এফর্ট স্কেলে লগ করেন।',
   'Sleep and recovery': 'ঘুম ও পুনরুদ্ধার',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'তোমার ঘড়ি থেকে, একই সময়সীমার জন্য: কতক্ষণ ঘুমিয়েছ, বিশ্রামের হৃদস্পন্দন, HRV এবং পদক্ষেপ।',
+  'What you eat': 'আপনি যা খান',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'একই সময়ের প্রতিদিন: আপনার লগ করা ক্যালোরি, প্রোটিন, কার্বস, ফ্যাট ও ফাইবার, পানি ও সাপ্লিমেন্ট, এবং আপনার দৈনিক লক্ষ্য। আলাদা আলাদা খাবার নয়।',
   'Heavier lifts, lower reps.': 'ভারী লিফট, কম রেপ।',
   'Volume and progression.': 'ভলিউম আর প্রগ্রেশন।',
   'Balanced, sustainable training.': 'ভারসাম্যপূর্ণ, টেকসই ট্রেনিং।',

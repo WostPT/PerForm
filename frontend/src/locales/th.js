@@ -1210,6 +1210,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'หน่วย ภาษา และมาตรวัดความหนักที่คุณใช้บันทึก',
   'Sleep and recovery': 'การนอนและการฟื้นตัว',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'จากนาฬิกาของคุณ ในช่วงเวลาเดียวกัน: ระยะเวลาที่คุณนอน อัตราการเต้นของหัวใจขณะพัก HRV และจำนวนก้าว',
+  'What you eat': 'สิ่งที่คุณกิน',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'รายวันในช่วงเดียวกัน: แคลอรี โปรตีน คาร์บ ไขมัน และใยอาหารที่คุณบันทึก น้ำและอาหารเสริม และเป้าหมายรายวันของคุณ ไม่ส่งรายการอาหารแต่ละอย่าง',
   'Likes: {0}': 'ชอบ: {0}',
   'Limits': 'ข้อจำกัด',
   'Limits: {0}': 'ข้อจำกัด: {0}',

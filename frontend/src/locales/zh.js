@@ -1122,6 +1122,8 @@ export default {
   'Your unit, your language and which effort scale you log.': '你的单位、语言，以及你记录强度所用的标度。',
   'Sleep and recovery': '睡眠与恢复',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': '来自你的手表，同一时间段：睡了多久、静息心率、HRV 和步数。',
+  'What you eat': '你吃了什么',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': '同一段时间的每一天：你记录的热量、蛋白质、碳水、脂肪和纤维，喝的水和补充剂，以及你的每日目标。不包括具体食物。',
   'Likes: {0}': '喜欢：{0}',
   'Limits': '限制',
   'Limits: {0}': '限制：{0}',

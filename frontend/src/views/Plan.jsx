@@ -19,6 +19,8 @@ import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
 import { DEMO } from '../lib/demo.js'
 import { MOBILE } from '../lib/mobile.js'
 import { coachAvailable } from '../lib/coach.js'
+import Library from './Library.jsx'   // PerForm
+import PerformMealPlan from '../components/PerformMealPlan.jsx'   // PerForm
 import { queueOf, queueView } from '../lib/queue.js'
 import { deriveSessionName } from '../lib/session-merge.js'
 import { markUndone, undoMarks } from '../lib/sync-merge.js'
@@ -32,7 +34,8 @@ import {
 // lives in this browser's storage and not in S.
 export const PLAN_VIEW_KEY = 'gym_plan_view'
 const readView = () => {
-  try { return localStorage.getItem(PLAN_VIEW_KEY) === 'routines' ? 'routines' : 'schedule' } catch { return 'schedule' }
+  // PerForm: Meals and Exercises too
+  try { const v = localStorage.getItem(PLAN_VIEW_KEY); return ['routines', 'meals', 'exercises'].includes(v) ? v : 'schedule' } catch { return 'schedule' }
 }
 
 /* Undo for Plan's two removals (v1.3.11). Both go through the store's normal update, so sync
@@ -169,10 +172,14 @@ export default function Plan() {
       </div>
     </div>
     <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
+    {/* PerForm: Plan holds the intentions — when you train, what you train, what you eat, and the
+        exercise library (no longer a tab of its own). */}
     <Segmented className="plan-views" value={view} onChange={setView}
-      options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }]} />
+      options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }, { value: 'meals', label: t('Meals') }, { value: 'exercises', label: t('Exercises') }]} />
     {view === 'routines'
       ? <Routines S={S} update={update} nav={nav} />
+      : view === 'meals' ? <PerformMealPlan />
+      : view === 'exercises' ? <Library embedded />
       : <Schedule S={S} update={update} nav={nav} mode={mode} />}
   </div>
 }

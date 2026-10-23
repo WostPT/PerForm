@@ -615,7 +615,9 @@ const OWN_MERGE = new Set([
   'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes',
 ])
 // Stamped per key instead of whole: one day of the plan, one exercise's note or bar.
-const PER_KEY = new Set(['week', 'dayPlan', 'exNotes', 'barWeights'])
+// PerForm: the food log one day at a time, the nutrition settings one setting at a time
+// (lib/perform-nutrition.js) — a meal logged on the phone survives water added on the desktop.
+const PER_KEY = new Set(['week', 'dayPlan', 'exNotes', 'barWeights', 'food', 'nutrition'])
 // The order of the routines, as the list shows them, is a choice of its own (`edited.routineOrder`):
 // a reorder on one device was lost to the other's whole copy whenever that one was newer.
 export const ORDER_KEY = 'routineOrder'

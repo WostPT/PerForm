@@ -10,5 +10,6 @@ export const DATA_CATEGORIES = Object.freeze([
   'bodyweight',  // weigh-ins in the window and your goal weight
   'profile',     // the intake answers you gave the Coach, including any limitations
   'prefs',       // unit, language, effort scale
-  'recovery'     // PerForm: sleep, resting heart rate, HRV and steps from the watch (perform-recovery.js)
+  'recovery',    // PerForm: sleep, resting heart rate, HRV and steps from the watch (perform-recovery.js)
+  'nutrition'    // PerForm: daily calories, macros, water and supplements eaten, and the targets (perform-nutrition.js)
 ]);

@@ -260,6 +260,7 @@ renders from, so the screen cannot drift from the payload — are:
 | `cohort` (optional) | only with comparison on and your own opt-in: anonymous medians from the other people sharing — never their data, and never yours to them beyond the same medians |
 | `prefs` | unit, language, effort scale |
 | `recovery` | PerForm: sleep (minutes asleep, deep, REM, awake), resting heart rate, HRV and steps from the watch, over the same window |
+| `nutrition` | PerForm: per logged day the calories, protein, carbs, fat and fibre eaten, water and supplements ticked off, and your daily targets — not the single foods |
 
 A review reads a training block, not a training career: the window is capped at **12 weeks or 60
 sessions**. Your profile is identified by a stable pseudonym that is never the user id and never

@@ -1102,6 +1102,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'Ваша единица измерения, язык и шкала, по которой вы оцениваете усилие.',
   'Sleep and recovery': 'Сон и восстановление',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'С твоих часов, за тот же период: сколько ты спал, пульс в покое, ВСР и шаги.',
+  'What you eat': 'Что ты ешь',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'По дням за тот же период: записанные калории, белки, углеводы, жиры и клетчатка, вода и добавки, а также твои дневные цели. Не сами продукты.',
   'Likes: {0}': 'Нравится: {0}',
   'Limits': 'Ограничения',
   'Limits: {0}': 'Ограничения: {0}',

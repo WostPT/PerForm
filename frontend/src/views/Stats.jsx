@@ -28,6 +28,7 @@ import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { isWarmupRow } from '../lib/workout-model.js'
 import { isRun } from '../lib/perform-running.js'   // PerForm
+import PerformNutritionStats from '../components/PerformNutritionStats.jsx'   // PerForm
 
 // Set 1 to 5 on the per-set chart — system colours, so each line keeps its hue in dark mode.
 const SET_COLORS = ['var(--blue)', 'var(--green)', 'var(--orange)', 'var(--purple)', 'var(--pink)']
@@ -674,6 +675,8 @@ export default function Stats() {
           : t('Waist, arms, body fat and anything else you measure, each with its own curve.')}</div></div>
       <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/measurements')}>{t('Open')}</Button>
     </div>
+    {/* PerForm: the last 7 days of food against their targets (views/Nutrition.jsx). */}
+    <PerformNutritionStats />
     {/* PerForm: the watch's data (views/Health.jsx). */}
     <div className="card row between" style={{ alignItems: 'center', gap: 12 }}>
       <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Sleep & recovery')}</h2>

@@ -1122,6 +1122,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'आपकी इकाई, आपकी भाषा और वह पैमाना जिस पर आप मेहनत दर्ज करते हैं।',
   'Sleep and recovery': 'नींद और रिकवरी',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'आपकी घड़ी से, उसी अवधि के लिए: आप कितनी देर सोए, आराम की हृदय गति, HRV और कदम।',
+  'What you eat': 'आप क्या खाते हैं',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'उसी अवधि में हर दिन: आपके दर्ज किए कैलोरी, प्रोटीन, कार्ब्स, फ़ैट और फ़ाइबर, पानी और सप्लीमेंट, और आपके दैनिक लक्ष्य। अलग-अलग खाद्य पदार्थ नहीं।',
   'Likes: {0}': 'पसंद: {0}',
   'Limits': 'सीमाएँ',
   'Limits: {0}': 'सीमाएँ: {0}',

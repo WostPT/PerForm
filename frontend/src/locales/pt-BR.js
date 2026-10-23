@@ -615,6 +615,8 @@ export const PT_BR_OVERRIDES = {
   'Your unit, your language and which effort scale you log.': 'Sua unidade, seu idioma e a escala com que você registra o esforço.',
   'Sleep and recovery': 'Sono e recuperação',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Do seu relógio, para o mesmo período: quanto você dormiu, frequência cardíaca em repouso, VFC e passos.',
+  'What you eat': 'O que você come',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'Por dia no mesmo período: as calorias, proteínas, carboidratos, gorduras e fibras que você registrou, a água e os suplementos, e suas metas diárias. Não os alimentos em si.',
   'Not quite right? Say what to change below and I will revise the whole plan.': 'Não ficou bom? Diga abaixo o que mudar e eu reviso o plano inteiro.',
   'Pick one to continue.': 'Escolha uma para continuar.',
   'Pick what you will actually keep, not the best week you can imagine.': 'Escolha o que você vai realmente cumprir, não a melhor semana que consegue imaginar.',
