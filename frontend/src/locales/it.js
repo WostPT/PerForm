@@ -1122,6 +1122,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'La tua unità, la tua lingua e la scala con cui registri lo sforzo.',
   'Sleep and recovery': 'Sonno e recupero',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Dal tuo orologio, per lo stesso periodo: quanto hai dormito, frequenza cardiaca a riposo, HRV e passi.',
+  'What you eat': 'Cosa mangi',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'Per giorno nello stesso periodo: calorie, proteine, carboidrati, grassi e fibre che hai registrato, acqua e integratori, e i tuoi obiettivi giornalieri. Non i singoli alimenti.',
   'Likes: {0}': 'Piace: {0}',
   'Limits': 'Limiti',
   'Limits: {0}': 'Limiti: {0}',

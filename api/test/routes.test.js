@@ -157,7 +157,7 @@ test('the disclosure names the provider and the same five categories the payload
   const r = await call('GET /api/coach/disclosure');
   assert.equal(r.status, 200);
   assert.equal(r.body.providerLabel, 'Google Gemini');
-  assert.deepEqual(r.body.categories, ['plan', 'training', 'bodyweight', 'profile', 'prefs', 'recovery']);
+  assert.deepEqual(r.body.categories, ['plan', 'training', 'bodyweight', 'profile', 'prefs', 'recovery', 'nutrition']);
 });
 
 /* ---------- debrief + cohort routes ---------- */

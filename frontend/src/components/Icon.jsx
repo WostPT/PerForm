@@ -20,6 +20,8 @@ const P = {
   magnifier: <><circle cx="11" cy="11" r="7" /><path d="m20.5 20.5-4.4-4.4" /></>,
   // A real cog outline (8 teeth, generated on a circle) — an earlier version drew
   // radial rays and was indistinguishable from `sun` at tab-bar size.
+  // PerForm: the Nutrition tab (a fork and a knife)
+  fork: <path d="M7.5 3.5v7M5.2 3.5v5a2.3 2.3 0 0 0 4.6 0v-5M7.5 10.8v9.7M17.2 20.5V3.5c-2.2 0-3.7 2.6-3.7 6.2s1.5 4.3 3.7 4.3" />,
   gear: <><path d="M20.48 10.59 20.48 13.41 18.58 13.72 17.87 15.43 19 17 17 19 15.43 17.87 13.72 18.58 13.41 20.48 10.59 20.48 10.28 18.58 8.57 17.87 7 19 5 17 6.13 15.43 5.42 13.72 3.52 13.41 3.52 10.59 5.42 10.28 6.13 8.57 5 7 7 5 8.57 6.13 10.28 5.42 10.59 3.52 13.41 3.52 13.72 5.42 15.43 6.13 17 5 19 7 17.87 8.57 18.58 10.28Z" /><circle cx="12" cy="12" r="3.1" /></>,
 
   /* ---- training ---- */

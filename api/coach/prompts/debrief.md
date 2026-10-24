@@ -1,6 +1,6 @@
 # Task: debrief one workout
 
-Read `session` — one workout, exactly as logged — and say how it went. `previous` holds the last few times the same routine was trained (most recent last), `aggregates` the stall picture for the exercises in it, `bodyweight` the last four weeks of weigh-ins, and `recovery`, when present, the watch's sleep and recovery over the same four weeks. `cohort`, when present, is anonymous medians from other lifters on this instance.
+Read `session` — one workout, exactly as logged — and say how it went. `previous` holds the last few times the same routine was trained (most recent last), `aggregates` the stall picture for the exercises in it, `bodyweight` the last four weeks of weigh-ins, `recovery`, when present, the watch's sleep and recovery over the same four weeks, and `nutrition`, when present, what they logged eating over those weeks. `cohort`, when present, is anonymous medians from other lifters on this instance.
 
 This is a reading, not a plan. You change nothing, add nothing, and name no exercise ids. Advice goes into `nextTime` as plain sentences the lifter can act on in their next session — the plan itself is the review task's job.
 

@@ -1,0 +1,138 @@
+/* PerForm: the Nutrition tab, its sheets, the Home card and Plan › Meals. Built on the app's
+   tokens (index.css), so light mode and the accent colour follow on their own. */
+
+.nu-ficon{
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+  background:var(--surface-2);font-size:20px;--icon-stroke:1.7;
+}
+#modal-root .nu-ficon{background:var(--surface-3)}
+
+.nu-track{height:8px;border-radius:4px;background:var(--surface-3);overflow:hidden}
+.nu-mtrack{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden;margin-top:6px}
+.nu-fill{height:100%;border-radius:inherit;transition:width var(--med) var(--ease)}
+.nu-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.nu-cap{font-size:13px;color:var(--label-2);margin:0 0 10px}
+.nu-macros{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+
+/* week strip: the app's, with a small bar of the day's calories against its target */
+.nu-week{margin:-6px 0 12px}
+.nu-week .wday.sel{background:var(--surface)}
+.nu-week .wday.sel:not(.today) .num{color:var(--acc);font-weight:600}
+.nu-week .wt{width:24px;height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden;margin:0 auto}
+.nu-week .wt>span{display:block;height:100%}
+.nu-weeknav{display:flex;align-items:center;justify-content:space-between;margin:-8px 0 6px}
+.nu-weeknav .iconbtn{width:30px;height:30px;font-size:15px;background:none}
+
+.nu-daytag{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:start;background:var(--surface);
+  border-radius:var(--r-card);padding:8px 12px;min-height:52px;margin-bottom:12px;
+}
+.nu-daytag:active{background:var(--surface-2)}
+
+/* a meal of the day */
+.nu-meal{background:var(--surface);border-radius:var(--r-card);margin-bottom:12px;overflow:hidden}
+.nu-mealhd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 8px 4px 16px}
+.nu-mealhd b{font-size:17px;font-weight:600}
+.nu-mealhd .iconbtn{width:30px;height:30px;font-size:16px;background:none;color:var(--label-2)}
+.nu-mealsub{padding:0 16px 8px}
+.nu-entry{
+  display:flex;align-items:center;gap:12px;width:100%;text-align:start;padding:9px 16px;min-height:56px;
+  border-top:var(--hair) solid var(--sep);
+}
+.nu-entry:active{background:var(--surface-2)}
+.nu-entry .tt{font-size:16px}
+.nu-entry .ss{font-size:13px;color:var(--label-2);margin-top:2px}
+.nu-addrow{
+  display:flex;align-items:center;gap:8px;width:100%;padding:12px 16px;min-height:48px;color:var(--acc);
+  font-size:16px;border-top:var(--hair) solid var(--sep);
+}
+.nu-addrow:active{background:var(--surface-2)}
+.nu-tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;margin-inline-start:6px;vertical-align:2px}
+.nu-tag.pre{color:var(--orange);background:color-mix(in srgb,var(--orange) 16%,transparent)}
+.nu-tag.post{color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)}
+.nu-planned{margin:2px 12px 12px;padding:12px;border:1px dashed var(--surface-3);border-radius:12px}
+.nu-planned .row{gap:8px}
+
+.nu-workout{
+  display:flex;align-items:center;gap:12px;border:1px solid color-mix(in srgb,var(--acc) 35%,transparent);
+  background:color-mix(in srgb,var(--acc) 7%,transparent);border-radius:var(--r-card);padding:12px 14px;margin-bottom:12px;
+}
+.nu-workout .nu-ficon{color:var(--acc)}
+
+.nu-empties{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+
+/* water */
+.nu-water{color:var(--teal)}
+.btn.nu-waterbtn{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);flex:1}
+.btn.nu-minus{width:50px;flex:none;padding:0;justify-content:center}
+.nu-drops{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.nu-drop{display:inline-flex}
+.nu-drop path{fill:transparent;stroke:var(--surface-3);stroke-width:1.8;transition:fill .25s,stroke .25s}
+.nu-drop.on path{fill:var(--teal);stroke:var(--teal)}
+.nu-drop.pop{animation:nu-pop .35s var(--ease)}
+@keyframes nu-pop{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+.nu-sep{height:var(--hair);background:var(--sep);margin:14px 0 10px}
+
+/* supplements */
+.nu-supps{display:flex;gap:8px;flex-wrap:wrap}
+.nu-suppchip{
+  display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:12px;background:var(--surface-2);
+  font-size:14px;text-align:start;min-height:48px;
+}
+.nu-suppchip .ck{
+  width:26px;height:26px;border-radius:50%;border:2px solid var(--surface-3);display:inline-flex;
+  align-items:center;justify-content:center;color:transparent;flex:none;font-size:15px;--icon-stroke:3;
+}
+.nu-suppchip.on{background:color-mix(in srgb,var(--cyan,#64d2ff) 15%,transparent)}
+.nu-suppchip.on .ck{background:var(--cyan,#64d2ff);border-color:var(--cyan,#64d2ff);color:#000}
+
+/* add food / how much */
+.nu-filters{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}
+.nu-filters .chip{text-transform:none}
+.nu-amount{display:flex;align-items:center;gap:10px}
+.nu-stepbtn{
+  width:52px;height:52px;border-radius:50%;background:var(--surface-2);display:inline-flex;
+  align-items:center;justify-content:center;color:var(--acc);flex:none;font-size:22px;--icon-stroke:2.2;
+}
+.nu-stepbtn:active{transform:scale(.94)}
+.nu-amt{
+  width:100%;background:transparent;border:none;color:var(--label);font-size:44px;font-weight:600;
+  text-align:center;letter-spacing:-.03em;outline:none;padding:0;
+}
+.nu-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:16px}
+.nu-chips .chip{text-transform:none}
+.nu-box{background:var(--surface-2);border-radius:var(--r-card);padding:14px 16px;margin-top:12px}
+.nu-adds{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.nu-adds .v{font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.nu-star{color:var(--label-3)}
+.nu-star.on{color:var(--yellow)}
+.nu-star.on .icn{fill:currentColor}
+
+/* forms in the sheets */
+.nu-field{display:block;margin-bottom:12px}
+.nu-field>span:first-child{display:block;color:var(--label-2);font-size:13px;margin:0 2px 6px}
+.nu-field .field{background:var(--surface-2)}
+.nu-unit{position:relative}
+.nu-unit>i{position:absolute;inset-inline-end:15px;top:50%;transform:translateY(-50%);font-style:normal;color:var(--label-2);pointer-events:none}
+.nu-unit .field{padding-inline-end:52px}
+.nu-split{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;background:var(--surface-3)}
+.nu-grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.nu-icons{display:flex;gap:6px;flex-wrap:wrap}
+.nu-icons button{width:40px;height:40px;border-radius:10px;background:var(--surface-2);display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:var(--label-2)}
+.nu-icons button.on{background:var(--acc-soft);color:var(--acc)}
+
+/* plan timeline (Plan › Meals) */
+.nu-tl{display:grid;grid-template-columns:48px 1fr;gap:10px;margin-bottom:10px}
+.nu-tl .tm{font-size:13px;color:var(--label-2);padding-top:14px;text-align:end;font-variant-numeric:tabular-nums}
+.nu-slot{background:var(--surface);border-radius:var(--r-card);padding:12px 14px;width:100%;text-align:start;display:block}
+button.nu-slot:active{background:var(--surface-2)}
+.nu-slot.workout{border:1px solid color-mix(in srgb,var(--acc) 35%,transparent);background:color-mix(in srgb,var(--acc) 7%,transparent)}
+.nu-slot.supp{background:color-mix(in srgb,var(--cyan,#64d2ff) 8%,transparent)}
+.nu-anchor{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;margin-top:6px}
+.nu-anchor.pre{color:var(--orange);background:color-mix(in srgb,var(--orange) 15%,transparent)}
+.nu-anchor.post{color:var(--green);background:color-mix(in srgb,var(--green) 15%,transparent)}
+
+/* Plan's four views (Schedule, Routines, Meals, Exercises) in one row on a narrow phone */
+.plan-views button{font-size:14px}
+.plan-views button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr.lib-embedded{margin-top:0}

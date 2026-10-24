@@ -1,6 +1,6 @@
 # Task: review their training and propose plan changes
 
-Read `window` (what they actually did), `aggregates` (stalls, adherence, coverage), `bodyweight`, `recovery` if present, and `userNote` if present. Then decide whether the **plan** should change.
+Read `window` (what they actually did), `aggregates` (stalls, adherence, coverage), `bodyweight`, `recovery` and `nutrition` if present, and `userNote` if present. Then decide whether the **plan** should change.
 
 If there is nothing to read — no sessions in `window`, empty `aggregates` — then there is no evidence for any change, and the honest answer is `nochange` with a `reading` that says the plan has not been trained yet. Do not invent a reason to change something.
 

@@ -923,6 +923,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'Твоя одиниця виміру, мова і шкала, за якою ти оцінюєш зусилля.',
   'Sleep and recovery': 'Сон і відновлення',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'З твого годинника, за той самий період: скільки ти спав, пульс у спокої, ВСР і кроки.',
+  'What you eat': 'Що ти їси',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'По днях за той самий період: записані калорії, білки, вуглеводи, жири й клітковина, вода та добавки, а також твої денні цілі. Не самі продукти.',
   'Likes: {0}': 'Подобається: {0}',
   'Limits': 'Обмеження',
   'Limits: {0}': 'Обмеження: {0}',

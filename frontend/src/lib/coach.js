@@ -24,7 +24,8 @@ import { t, tn } from './i18n.js'
 // 2: the training line names the session notes, which the payload carries and version 1 never
 // mentioned.
 // 3 (PerForm): the recovery line, for the watch's sleep, resting heart rate, HRV and steps.
-export const CONSENT_VERSION = 3
+// 4 (PerForm): the nutrition line, for what you log eating.
+export const CONSENT_VERSION = 4
 
 // Bounds. The whole state has to stay inside the server's 5 MB body limit, and a Coach log
 // that grows forever is exactly the kind of thing that eats it invisibly. Worst case here is
@@ -74,7 +75,8 @@ export const CATEGORY_TEXT = {
   bodyweight: () => [t('Body weight'), t('Weigh-ins from the same window, and your goal weight if you set one.')],
   profile: () => [t('What you tell the Coach'), t('Your intake answers, including any limitations or injuries you describe.')],
   prefs: () => [t('A few preferences'), t('Your unit, your language and which effort scale you log.')],
-  recovery: () => [t('Sleep and recovery'), t('From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.')]
+  recovery: () => [t('Sleep and recovery'), t('From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.')],
+  nutrition: () => [t('What you eat'), t('Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.')]
 }
 export const hasConsent = S => !!S?.coach?.consent?.agreedAt && S.coach.consent.version === CONSENT_VERSION
 

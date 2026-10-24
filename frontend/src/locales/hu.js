@@ -1202,6 +1202,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'A mértékegységed, a nyelved, és hogy melyik skálán rögzíted a megerőltetést.',
   'Sleep and recovery': 'Alvás és regeneráció',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Az órádról, ugyanarra az időszakra: mennyit aludtál, nyugalmi pulzus, HRV és lépések.',
+  'What you eat': 'Amit eszel',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'Naponta ugyanarra az időszakra: a rögzített kalória, fehérje, szénhidrát, zsír és rost, a víz és a táplálékkiegészítők, valamint a napi céljaid. Az egyes ételek nem.',
   'Likes: {0}': 'Kedveli: {0}',
   'Limits': 'Korlátok',
   'Limits: {0}': 'Korlátok: {0}',

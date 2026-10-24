@@ -1122,6 +1122,8 @@ export default {
   'Your unit, your language and which effort scale you log.': '단위, 언어, 그리고 강도를 기록하는 척도.',
   'Sleep and recovery': '수면과 회복',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': '시계에서, 같은 기간 동안: 수면 시간, 안정 시 심박수, HRV, 걸음 수.',
+  'What you eat': '먹은 것',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': '같은 기간의 날마다: 기록한 칼로리, 단백질, 탄수화물, 지방, 식이섬유, 물과 보충제, 그리고 하루 목표. 개별 음식은 보내지 않습니다.',
   'Likes: {0}': '좋아함: {0}',
   'Limits': '제한',
   'Limits: {0}': '제한: {0}',

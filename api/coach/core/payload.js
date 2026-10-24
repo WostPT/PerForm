@@ -13,6 +13,7 @@
 import { glyphStr } from './glyphs.js';
 import { LIBRARY, LIB_BY_ID, libraryHas, libraryName, librarySlice, isStretch, MAX_LIBRARY } from './library.js';
 import { recoveryOf } from './perform-recovery.js';
+import { nutritionOf } from './perform-nutrition.js';
 
 export const CONTRACT = 1;
 // Bounds from FR-22. A review reads a training block, not a training career: more history
@@ -540,6 +541,9 @@ export function build(S, opts = {}) {
       // PerForm: the watch's sleep and recovery over the same four weeks, ending on the session day.
       const rec = dated ? recoveryOf(S, iso(since), on) : null;
       if (rec) p.recovery = rec;
+      // PerForm: what they ate over the same four weeks.
+      const food = dated ? nutritionOf(S, iso(since), on) : null;
+      if (food) p.nutrition = food;
     } else {
       p.session = null;
       p.previous = [];
@@ -558,6 +562,9 @@ export function build(S, opts = {}) {
     // PerForm: the watch's sleep and recovery over the review window.
     const rec = recoveryOf(S, p.window.from, null);
     if (rec) p.recovery = rec;
+    // PerForm: what they ate over the review window.
+    const food = nutritionOf(S, p.window.from, null);
+    if (food) p.nutrition = food;
     if (opts.note) p.userNote = String(opts.note).slice(0, MAX_NOTE_CHARS);
     if (opts.cohort) p.cohort = cleanCohort(opts.cohort);
     // A review names mostly what is already trained; 60 candidates is plenty for a swap.

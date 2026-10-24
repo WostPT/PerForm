@@ -989,6 +989,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'وحدتك ولغتك ومقياس الجهد الذي تسجل به.',
   'Sleep and recovery': 'النوم والتعافي',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'من ساعتك، للفترة نفسها: مدة نومك ومعدل نبض القلب أثناء الراحة وتقلب معدل ضربات القلب (HRV) والخطوات.',
+  'What you eat': 'ما تأكله',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'لكل يوم في الفترة نفسها: السعرات والبروتين والكربوهيدرات والدهون والألياف التي سجّلتها، والماء والمكمّلات، وأهدافك اليومية. وليس الأطعمة بعينها.',
   'Likes: {0}': 'المفضلات: {0}',
   'Limits': 'القيود',
   'Limits: {0}': 'القيود: {0}',

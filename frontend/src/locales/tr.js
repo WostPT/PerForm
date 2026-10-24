@@ -1122,6 +1122,8 @@ export default {
   'Your unit, your language and which effort scale you log.': 'Birimin, dilin ve zorluğu hangi ölçekle kaydettiğin.',
   'Sleep and recovery': 'Uyku ve toparlanma',
   'From your watch, for the same window: how long you slept, resting heart rate, HRV and steps.': 'Saatinden, aynı dönem için: ne kadar uyuduğun, dinlenme nabzı, HRV ve adımlar.',
+  'What you eat': 'Ne yediğin',
+  'Per day in the same window: calories, protein, carbs, fat and fibre you logged, water and supplements, and your daily targets. Not the single foods.': 'Aynı dönemde gün gün: kaydettiğin kalori, protein, karbonhidrat, yağ ve lif, su ve takviyeler, ve günlük hedeflerin. Tek tek yiyecekler değil.',
   'Likes: {0}': 'Sevdikleri: {0}',
   'Limits': 'Sınırlar',
   'Limits: {0}': 'Sınırlar: {0}',
