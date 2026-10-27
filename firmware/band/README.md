@@ -2,20 +2,33 @@
 
 Firmware for the rep-counting band: a Seeed XIAO nRF52840 Sense worn on the wrist or ankle.
 
-## band-test (USB only)
-
-First experiment, no battery and no button. Calibrates two points from the board's tilt and
-counts reps between them, printing CSV over USB serial for analysis.
+## Setup (Windows, arduino-cli)
 
 ```powershell
 arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 arduino-cli core update-index
 arduino-cli core install Seeeduino:mbed
-arduino-cli lib install "Seeed Arduino LSM6DS3"
-arduino-cli compile --fqbn Seeeduino:mbed:xiaonRF52840Sense firmware/band/band-test
-arduino-cli upload  --fqbn Seeeduino:mbed:xiaonRF52840Sense -p COM5 firmware/band/band-test
-arduino-cli monitor -p COM5 --config baudrate=115200 > band-log.csv
+arduino-cli lib install "Seeed Arduino LSM6DS3" ArduinoBLE
+arduino-cli compile --fqbn Seeeduino:mbed:xiaonRF52840Sense firmware/band/perform-band
+arduino-cli upload  --fqbn Seeeduino:mbed:xiaonRF52840Sense -p COM6 firmware/band/perform-band
+arduino-cli monitor -p COM6 --config baudrate=115200 > firmware/band/logs/band.csv
 ```
 
-LED: blue = hold still at the current point, green = point saved, red flash = one rep.
-Send `r` over serial to calibrate again.
+Don't name variables `p1`, `p2`…: those are pin macros in this core.
+Logs in `logs/` are gitignored.
+
+## perform-band (current)
+
+Two-point calibration, then counts reps either by **tilt** (points ≥ 25° apart, e.g. a curl) or
+by **height** (points ≥ 5 cm apart without tilting, e.g. a squat). Reads the IMU at 200 Hz,
+prints CSV over USB at 100 Hz, and advertises over Bluetooth LE as "PerForm Band" with a reps
+characteristic (rep count, range of motion, peak speed) and an optional 50 Hz IMU stream.
+The protocol is documented at the top of `perform-band.ino`.
+
+LED: blue = hold still at the current point, green = point saved, then a red flash per rep in
+tilt mode or a green flash per rep in height mode. Send `r` over serial or BLE to calibrate again.
+
+## band-test (first experiment)
+
+USB only, tilt mode only, 50 Hz. Kept for reference. First run on 2026-10-27: calibration
+worked at 96°, 5 of 5 reps on the counted round, no false reps at rest.
