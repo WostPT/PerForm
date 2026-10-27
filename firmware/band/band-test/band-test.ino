@@ -35,8 +35,8 @@ enum State { CAL1, CAL1_DONE, CAL2, CAL2_DONE, RUN };
 State state = CAL1;
 
 float g[3] = {0, 0, 1};          // low-passed gravity direction (unit)
-float p1[3], p2[3], axisN[3];    // calibration points and rotation axis
-float span = 1;                  // angle p1 -> p2 (rad)
+float pt1[3], pt2[3], axisN[3];    // calibration points and rotation axis
+float span = 1;                  // angle pt1 -> pt2 (rad)
 unsigned long stillSince = 0, stateSince = 0, flashUntil = 0, lastTick = 0;
 float sum[3]; int sumN = 0;
 int reps = 0;
@@ -64,12 +64,12 @@ float angleDeg(const float *a, const float *b) {
   return acos(c) * 180.0 / PI;
 }
 
-// Signed angle from p1 to the current gravity, measured around the p1->p2
-// axis, as a fraction of the p1->p2 angle.
+// Signed angle from pt1 to the current gravity, measured around the pt1->pt2
+// axis, as a fraction of the pt1->pt2 angle.
 float position() {
   float d = dot(g, axisN), ip[3] = { g[0] - d*axisN[0], g[1] - d*axisN[1], g[2] - d*axisN[2] };
-  float c[3]; cross(p1, ip, c);
-  return atan2(dot(c, axisN), dot(p1, ip)) / span;
+  float c[3]; cross(pt1, ip, c);
+  return atan2(dot(c, axisN), dot(pt1, ip)) / span;
 }
 
 void enter(State s) {
@@ -126,8 +126,8 @@ void loop() {
     case CAL1:
       led(false, false, true);
       if (heldStill) {
-        for (int i = 0; i < 3; i++) p1[i] = sum[i];
-        normalize(p1);
+        for (int i = 0; i < 3; i++) pt1[i] = sum[i];
+        normalize(pt1);
         Serial.println("# point 1 saved");
         enter(CAL1_DONE);
       }
@@ -143,12 +143,12 @@ void loop() {
     case CAL2: {
       led(false, false, true);
       float cur[3] = { g[0], g[1], g[2] };
-      if (heldStill && angleDeg(cur, p1) >= MIN_ANGLE_DEG) {
-        for (int i = 0; i < 3; i++) p2[i] = sum[i];
-        normalize(p2);
-        cross(p1, p2, axisN);
+      if (heldStill && angleDeg(cur, pt1) >= MIN_ANGLE_DEG) {
+        for (int i = 0; i < 3; i++) pt2[i] = sum[i];
+        normalize(pt2);
+        cross(pt1, pt2, axisN);
         normalize(axisN);
-        span = angleDeg(p1, p2) * PI / 180.0;
+        span = angleDeg(pt1, pt2) * PI / 180.0;
         Serial.print("# point 2 saved, angle ");
         Serial.println(span * 180.0 / PI, 1);
         enter(CAL2_DONE);
