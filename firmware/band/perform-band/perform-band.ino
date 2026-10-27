@@ -18,16 +18,16 @@
 // pulled gently back to zero while moving, so it doesn't drift. A rep is a move
 // towards point 2 followed by a move back.
 //
-// USB serial (115200) prints CSV at 100 Hz:
-//   t_ms,ax,ay,az,gx,gy,gz,pos,vz,h,reps,state,mode
-// ax..az in g, gx..gz in deg/s, pos = tilt position (0 at point 1, 1 at point 2),
-// vz = vertical speed (m/s, up positive), h = height since point 1 (m).
+// USB serial (115200) prints CSV at 50 Hz, integers only:
+//   t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,state,mode
+// accel in mg, gyro in 0.1 deg/s, pos = tilt position x1000 (0 at point 1,
+// 1000 at point 2), vz = vertical speed (mm/s, up positive), h = height since point 1 (mm).
 // Lines starting with '#' are events. Send 'r' to recalibrate.
 //
 // Bluetooth LE, name "PerForm Band", service 8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10:
 //   ...0002 reps    (read/notify, 8 bytes LE): uint16 reps, uint8 mode, uint8 state,
 //                   uint16 rom_mm (height mode), uint16 peak_speed_mm_s
-//   ...0003 stream  (notify, 20 bytes LE, 50 Hz while subscribed): uint16 t_ms (wraps),
+//   ...0003 stream  (notify, 20 bytes LE, 25 Hz while subscribed): uint16 t_ms (wraps),
 //                   int16 ax,ay,az (mg), int16 gx,gy,gz (0.1 deg/s), int16 pos*1000,
 //                   int16 vz (mm/s), int16 h (mm)
 //   ...0004 control (write, 1 byte): 'r' = recalibrate
@@ -39,10 +39,9 @@
 
 LSM6DS3 imu(I2C_MODE, 0x6A);
 
-const unsigned long PERIOD_US = 5000;  // 200 Hz
-const float DT = 0.005;
-const int SERIAL_EVERY = 2;            // 100 Hz
-const int BLE_EVERY = 4;               // 50 Hz
+const unsigned long PERIOD_US = 5000;  // aim for 200 Hz; the real step is measured
+const unsigned long SERIAL_MS = 20;    // CSV at 50 Hz
+const unsigned long BLE_MS = 40;       // stream at 25 Hz
 const float GRAV = 9.81;
 
 const float STILL_GYRO_DPS = 8.0;      // still = gyro below this...
@@ -72,7 +71,7 @@ float calHeight = 0;             // calibrated height pt1 -> pt2 (m), height mod
 int dir = 1;                     // +1 if point 2 is above point 1
 
 unsigned long stillSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
-unsigned long tick = 0;
+unsigned long lastSerial = 0, lastBle = 0;
 int reps = 0;
 bool reachedHigh = false;        // tilt mode
 int phase = 0;                   // height mode: 0 at 1, 1 going, 2 at 2, 3 returning
@@ -120,7 +119,17 @@ float tiltPosition() {
   return atan2(dot(c, axisN), dot(pt1, ip)) / span;
 }
 
-void printHeader() { Serial.println("t_ms,ax,ay,az,gx,gy,gz,pos,vz,h,reps,state,mode"); }
+void printHeader() { Serial.println("t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,state,mode"); }
+
+// Accel (g) and gyro (deg/s) in one 12-byte I2C burst: gyro X..Z then accel X..Z.
+void readImu(float *a, float *w) {
+  uint8_t b[12];
+  imu.readRegisterRegion(b, LSM6DS3_ACC_GYRO_OUTX_L_G, 12);
+  for (int i = 0; i < 3; i++) {
+    w[i] = imu.calcGyro((int16_t)(b[2*i] | (b[2*i + 1] << 8)));
+    a[i] = imu.calcAccel((int16_t)(b[6 + 2*i] | (b[6 + 2*i + 1] << 8)));
+  }
+}
 
 void publishReps() {
   if (!bleOk) return;
@@ -152,9 +161,9 @@ void startCalibration() {
 void countRep() {
   reps++;
   flashUntil = millis() + 200;
-  Serial.print("# rep "); Serial.print(reps);
-  Serial.print(" rom_cm "); Serial.print(repRom * 100, 1);
-  Serial.print(" peak_m_s "); Serial.println(repPeak, 2);
+  char line[64];
+  snprintf(line, sizeof line, "# rep %d rom_mm %ld peak_mm_s %ld\r\n", reps, lround(repRom * 1000), lround(repPeak * 1000));
+  Serial.write(line, strlen(line));
   publishReps();
   repPeak = 0;
 }
@@ -194,12 +203,14 @@ void setup() {
     Serial.println("# error: IMU not found");
     while (true) { led(true, false, false); delay(200); led(false, false, false); delay(200); }
   }
+  Wire.setClock(400000);
   // Start from the gravity and gyro offset the sensor actually reads
   // (this one reads ~1.04 g and ~6 deg/s at rest).
   float sum[3] = {0, 0, 0}, wSum[3] = {0, 0, 0};
   for (int n = 0; n < 100; n++) {
-    sum[0] += imu.readFloatAccelX(); sum[1] += imu.readFloatAccelY(); sum[2] += imu.readFloatAccelZ();
-    wSum[0] += imu.readFloatGyroX(); wSum[1] += imu.readFloatGyroY(); wSum[2] += imu.readFloatGyroZ();
+    float a[3], w[3];
+    readImu(a, w);
+    for (int i = 0; i < 3; i++) { sum[i] += a[i]; wSum[i] += w[i]; }
     delay(5);
   }
   for (int i = 0; i < 3; i++) grav[i] = sum[i] / 100;
@@ -220,12 +231,14 @@ void loop() {
 
   unsigned long nowUs = micros();
   if (nowUs - lastUs < PERIOD_US) return;
-  lastUs = (nowUs - lastUs > 4 * PERIOD_US) ? nowUs : lastUs + PERIOD_US;
+  // Integrate over the time that really passed: the loop runs slower than
+  // PERIOD_US when serial or BLE are busy.
+  float DT = min((nowUs - lastUs) * 1e-6f, 0.1f);
+  lastUs = nowUs;
   unsigned long now = millis();
-  tick++;
 
-  float a[3] = { imu.readFloatAccelX(), imu.readFloatAccelY(), imu.readFloatAccelZ() };
-  float wRaw[3] = { imu.readFloatGyroX(), imu.readFloatGyroY(), imu.readFloatGyroZ() };
+  float a[3], wRaw[3];
+  readImu(a, wRaw);
   float w[3] = { wRaw[0] - gyroBias[0], wRaw[1] - gyroBias[1], wRaw[2] - gyroBias[2] };
   float aMag = norm(a);
 
@@ -240,7 +253,8 @@ void loop() {
   bool heldStill = stillSince && now - stillSince >= HOLD_MS;
 
   // Gravity in the board frame turns opposite to the board: dg/dt = -w x g.
-  float om[3] = { w[0] * DEG_TO_RAD, w[1] * DEG_TO_RAD, w[2] * DEG_TO_RAD }, c[3];
+  const float d2r = DEG_TO_RAD;
+  float om[3] = { w[0] * d2r, w[1] * d2r, w[2] * d2r }, c[3];
   cross(om, grav, c);
   for (int i = 0; i < 3; i++) grav[i] -= c[i] * DT;
   // Lean on the accelerometer when it reads close to plain gravity.
@@ -343,19 +357,19 @@ void loop() {
       break;
   }
 
-  if (tick % SERIAL_EVERY == 0) {
-    Serial.print(now); Serial.print(',');
-    for (int i = 0; i < 3; i++) { Serial.print(a[i], 3); Serial.print(','); }
-    for (int i = 0; i < 3; i++) { Serial.print(wRaw[i], 1); Serial.print(','); }
-    Serial.print(pos, 3); Serial.print(',');
-    Serial.print(vz, 3); Serial.print(',');
-    Serial.print(h, 3); Serial.print(',');
-    Serial.print(reps); Serial.print(',');
-    Serial.print((int)state); Serial.print(',');
-    Serial.println((int)mode);
+  if (now - lastSerial >= SERIAL_MS) {
+    lastSerial = now;
+    // One write per row: many small prints over USB slow the loop down.
+    char line[128];
+    snprintf(line, sizeof line, "%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%d,%d,%d\r\n", now,
+             lround(a[0] * 1000), lround(a[1] * 1000), lround(a[2] * 1000),
+             lround(wRaw[0] * 10), lround(wRaw[1] * 10), lround(wRaw[2] * 10),
+             lround(pos * 1000), lround(vz * 1000), lround(h * 1000), reps, (int)state, (int)mode);
+    Serial.write(line, strlen(line));
   }
 
-  if (bleOk && tick % BLE_EVERY == 0 && streamChar.subscribed()) {
+  if (bleOk && now - lastBle >= BLE_MS && streamChar.subscribed()) {
+    lastBle = now;
     uint8_t b[20];
     b[0] = (uint8_t)now;
     b[1] = (uint8_t)(now >> 8);

@@ -20,9 +20,10 @@ Logs in `logs/` are gitignored.
 ## perform-band (current)
 
 Two-point calibration, then counts reps either by **tilt** (points ≥ 25° apart, e.g. a curl) or
-by **height** (points ≥ 5 cm apart without tilting, e.g. a squat). Reads the IMU at 200 Hz,
-prints CSV over USB at 100 Hz, and advertises over Bluetooth LE as "PerForm Band" with a reps
-characteristic (rep count, range of motion, peak speed) and an optional 50 Hz IMU stream.
+by **height** (points ≥ 5 cm apart without tilting, e.g. a squat). Reads the IMU as fast as the
+loop allows (target 200 Hz, integrating over the measured time step), prints integer CSV over USB
+at 50 Hz, and advertises over Bluetooth LE as "PerForm Band" with a reps
+characteristic (rep count, range of motion, peak speed) and an optional 25 Hz IMU stream.
 The protocol is documented at the top of `perform-band.ino`.
 
 LED: blue = hold still at the current point, green = point saved, then a red flash per rep in
