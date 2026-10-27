@@ -194,14 +194,18 @@ void setup() {
     Serial.println("# error: IMU not found");
     while (true) { led(true, false, false); delay(200); led(false, false, false); delay(200); }
   }
-  // Start from the gravity the sensor actually reads.
-  float sum[3] = {0, 0, 0};
-  for (int n = 0; n < 50; n++) {
+  // Start from the gravity and gyro offset the sensor actually reads
+  // (this one reads ~1.04 g and ~6 deg/s at rest).
+  float sum[3] = {0, 0, 0}, wSum[3] = {0, 0, 0};
+  for (int n = 0; n < 100; n++) {
     sum[0] += imu.readFloatAccelX(); sum[1] += imu.readFloatAccelY(); sum[2] += imu.readFloatAccelZ();
+    wSum[0] += imu.readFloatGyroX(); wSum[1] += imu.readFloatGyroY(); wSum[2] += imu.readFloatGyroZ();
     delay(5);
   }
-  for (int i = 0; i < 3; i++) grav[i] = sum[i] / 50;
+  for (int i = 0; i < 3; i++) grav[i] = sum[i] / 100;
   gMag = norm(grav);
+  float wMean[3] = { wSum[0] / 100, wSum[1] / 100, wSum[2] / 100 };
+  if (norm(wMean) < 15) for (int i = 0; i < 3; i++) gyroBias[i] = wMean[i];  // only if it was lying still
   setupBle();
   startCalibration();
   lastUs = micros();
