@@ -194,6 +194,14 @@ void setup() {
     Serial.println("# error: IMU not found");
     while (true) { led(true, false, false); delay(200); led(false, false, false); delay(200); }
   }
+  // Start from the gravity the sensor actually reads.
+  float sum[3] = {0, 0, 0};
+  for (int n = 0; n < 50; n++) {
+    sum[0] += imu.readFloatAccelX(); sum[1] += imu.readFloatAccelY(); sum[2] += imu.readFloatAccelZ();
+    delay(5);
+  }
+  for (int i = 0; i < 3; i++) grav[i] = sum[i] / 50;
+  gMag = norm(grav);
   setupBle();
   startCalibration();
   lastUs = micros();
@@ -217,7 +225,11 @@ void loop() {
   float w[3] = { wRaw[0] - gyroBias[0], wRaw[1] - gyroBias[1], wRaw[2] - gyroBias[2] };
   float aMag = norm(a);
 
-  bool stillNow = norm(w) < STILL_GYRO_DPS && fabs(aMag - gMag) < STILL_ACC_G;
+  // This sensor reads ~1.04 g at rest, so learn the rest magnitude whenever the
+  // gyro says the board isn't turning; otherwise the board never counts as still.
+  bool gyroStill = norm(w) < STILL_GYRO_DPS;
+  if (gyroStill && fabs(aMag - gMag) < 0.15) gMag += 0.001 * (aMag - gMag);
+  bool stillNow = gyroStill && fabs(aMag - gMag) < STILL_ACC_G;
   if (!stillNow) stillSince = 0;
   else if (!stillSince) stillSince = now;
   bool zupt = stillSince && now - stillSince >= ZUPT_MS;
@@ -232,7 +244,6 @@ void loop() {
   for (int i = 0; i < 3; i++) grav[i] += k * (a[i] - grav[i]);
   if (zupt) {
     for (int i = 0; i < 3; i++) gyroBias[i] += 0.002 * (wRaw[i] - gyroBias[i]);
-    gMag += 0.002 * (aMag - gMag);
   }
   scaleTo(grav, gMag);
 
