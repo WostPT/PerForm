@@ -1,32 +1,38 @@
-// PerForm band firmware v2.
+// PerForm band firmware v3: Miguel's calibration design (2026-10-31).
 //
 // Board: Seeed XIAO nRF52840 Sense, core "Seeed nRF52 mbed-enabled Boards"
 // (FQBN Seeeduino:mbed:xiaonRF52840Sense), libraries "Seeed Arduino LSM6DS3"
 // and "ArduinoBLE".
 //
-// Calibration (same as band-test):
-//   1. Blue LED: hold still at point 1 until green.
-//   2. Blue LED: move to point 2 and hold still until green.
-// The band then picks how to count:
-//   - tilt mode when the two points differ by >= 25 deg (wrist turns, as in a curl);
-//   - height mode when they differ by >= 5 cm of height but not in angle
-//     (straight up/down, as in a squat or a press).
-//   3. LED off: each rep flashes red (tilt mode) or green (height mode).
+// Calibration, once per exercise (send 'r' over USB or BLE to start a new one):
+//   1. Blue blinking: go to point 1 and hold still. After 1.5 s still the LED is
+//      solid green for 1 s: point 1 saved.
+//   2. Purple blinking: go to point 2 and hold still. Solid green 1 s: saved.
+//      Point 2 can differ in height, in tilt, or both. Less than 5 cm and 15 deg
+//      is not enough: it keeps blinking purple.
+//   The band follows whichever changed more: tilt, height, or both when both
+//   changed a lot (then tilt counts the reps, as it doesn't drift, and height
+//   gives the range of motion). The calibration is saved in flash and loaded at
+//   power-up (solid green for 1 s, then counting).
+//
+// Reps, LED off: one rep = from point 1 to at least 80% of the way to point 2
+// and back. Full rep: short green flash. Turned back between 50% and 80%: short
+// red flash, counted as a partial, not a rep.
 //
 // Height comes from the accelerometer with gravity taken out, integrated into
 // vertical speed. Speed is reset to zero whenever the band is still and is
-// pulled gently back to zero while moving, so it doesn't drift. A rep is a move
-// towards point 2 followed by a move back.
+// pulled gently back to zero while moving, so it doesn't drift.
 //
 // USB serial (115200) prints CSV at 50 Hz, integers only:
-//   t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,state,mode
+//   t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,partials,state,mode
 // accel in mg, gyro in 0.1 deg/s, pos = tilt position x1000 (0 at point 1,
-// 1000 at point 2), vz = vertical speed (mm/s, up positive), h = height since point 1 (mm).
-// Lines starting with '#' are events. Send 'r' to recalibrate.
+// 1000 at point 2), vz = vertical speed (mm/s, up positive), h = height (mm).
+// state: 0 point 1, 1 point 1 saved, 2 point 2, 3 point 2 saved, 4 counting.
+// mode: 0 none, 1 tilt, 2 height, 3 both. Lines starting with '#' are events.
 //
 // Bluetooth LE, name "PerForm Band", service 8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10:
-//   ...0002 reps    (read/notify, 8 bytes LE): uint16 reps, uint8 mode, uint8 state,
-//                   uint16 rom_mm (height mode), uint16 peak_speed_mm_s
+//   ...0002 reps    (read/notify, 10 bytes LE): uint16 reps, uint16 partials,
+//                   uint8 mode, uint8 state, uint16 rom_mm, uint16 peak_speed_mm_s
 //   ...0003 stream  (notify, 20 bytes LE, 25 Hz while subscribed): uint16 t_ms (wraps),
 //                   int16 ax,ay,az (mg), int16 gx,gy,gz (0.1 deg/s), int16 pos*1000,
 //                   int16 vz (mm/s), int16 h (mm)
@@ -36,6 +42,10 @@
 #include <LSM6DS3.h>
 #include <Wire.h>
 #include <math.h>
+#if __has_include("kvstore_global_api.h")
+#include "kvstore_global_api.h"
+#define HAVE_KV 1
+#endif
 
 LSM6DS3 imu(I2C_MODE, 0x6A);
 
@@ -48,16 +58,20 @@ const float STILL_GYRO_DPS = 8.0;      // still = gyro below this...
 const float STILL_ACC_G = 0.03;        // ...and |accel| within this of gravity
 const unsigned long ZUPT_MS = 60;      // still this long -> speed is zero
 const unsigned long HOLD_MS = 1500;    // still this long -> calibration point saved
-const float MIN_ANGLE_DEG = 25.0;
-const float MIN_HEIGHT_M = 0.05;
-const float POS_LOW = 0.25, POS_HIGH = 0.75;  // tilt rep hysteresis
+const float MIN_ANGLE_DEG = 15.0;      // point 2 must differ by this much tilt...
+const float MIN_HEIGHT_M = 0.05;       // ...or this much height
+const float BIG_ANGLE_DEG = 25.0;      // "changed a lot", for picking tilt, height or both
+const float BIG_HEIGHT_M = 0.10;
+const float FULL_REP = 0.8;            // fraction of the way to point 2 for a rep
+const float PARTIAL_REP = 0.5;         // ...and for a partial
+const float POS_LEAVE = 0.35, POS_BACK = 0.3;  // tilt: left point 1 / back at point 1
 const float SPEED_GO = 0.10;           // m/s, a move has started
 const float SPEED_END = 0.03;          // m/s, a move has ended
-const float MIN_ROM_FRACTION = 0.3;    // a height rep must cover this much of the calibrated height
+const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ignored
 const float LEAK_PER_S = 0.2;          // pulls speed back to zero while moving
 
 enum State { CAL1, CAL1_DONE, CAL2, CAL2_DONE, RUN };
-enum Mode { NONE, TILT, HEIGHT };
+enum Mode { NONE, TILT, HEIGHT, BOTH };
 State state = CAL1;
 Mode mode = NONE;
 
@@ -72,14 +86,27 @@ int dir = 1;                     // +1 if point 2 is above point 1
 
 unsigned long stillSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
 unsigned long lastSerial = 0, lastBle = 0;
-int reps = 0;
-bool reachedHigh = false;        // tilt mode
-int phase = 0;                   // height mode: 0 at 1, 1 going, 2 at 2, 3 returning
-float moveStartH = 0, repRom = 0, repPeak = 0;
+bool flashRed = false;
+int reps = 0, partials = 0;
+bool away = false;               // tilt: left point 1 in this rep
+float maxPos = 0;                // tilt: furthest point reached in this rep
+int phase = 0;                   // height: 0 at 1, 1 going, 2 at 2, 3 returning
+float moveStartH = 0, returnStartH = 0, towardRom = 0, repRom = 0, repPeak = 0;
+float repMaxH = 0, repMinH = 0;  // height range in this rep, for the reported ROM
 bool bleOk = false;
 
+// Saved calibration, so it survives unplugging.
+struct Calibration {
+  uint32_t magic;
+  uint8_t mode;
+  int8_t dir;
+  float pt1[3], pt2[3], axisN[3], span, calHeight;
+};
+const uint32_t CAL_MAGIC = 0x50464233;  // "PFB3"
+
+
 BLEService bandService("8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10");
-BLECharacteristic repsChar("8c1f0002-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLERead | BLENotify, 8);
+BLECharacteristic repsChar("8c1f0002-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLERead | BLENotify, 10);
 BLECharacteristic streamChar("8c1f0003-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLENotify, 20);
 BLEByteCharacteristic controlChar("8c1f0004-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLEWrite | BLEWriteWithoutResponse);
 BLEDescriptor repsDesc("2901", "Reps");
@@ -119,7 +146,39 @@ float tiltPosition() {
   return atan2(dot(c, axisN), dot(pt1, ip)) / span;
 }
 
-void printHeader() { Serial.println("t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,state,mode"); }
+void printHeader() { Serial.println("t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,partials,state,mode"); }
+
+const char *modeName() {
+  return mode == TILT ? "tilt" : mode == HEIGHT ? "height" : mode == BOTH ? "both" : "none";
+}
+
+void saveCalibration() {
+#ifdef HAVE_KV
+  Calibration c = { CAL_MAGIC, (uint8_t)mode, (int8_t)dir,
+                    { pt1[0], pt1[1], pt1[2] }, { pt2[0], pt2[1], pt2[2] },
+                    { axisN[0], axisN[1], axisN[2] }, span, calHeight };
+  int err = kv_set("/kv/band_cal", &c, sizeof c, 0);
+  Serial.println(err == 0 ? "# calibration saved to flash" : "# could not save calibration");
+#else
+  Serial.println("# no flash storage in this build, calibration not saved");
+#endif
+}
+
+bool loadCalibration() {
+#ifdef HAVE_KV
+  Calibration c;
+  size_t got = 0;
+  if (kv_get("/kv/band_cal", &c, sizeof c, &got) != 0 || got != sizeof c || c.magic != CAL_MAGIC) return false;
+  mode = (Mode)c.mode;
+  dir = c.dir;
+  for (int i = 0; i < 3; i++) { pt1[i] = c.pt1[i]; pt2[i] = c.pt2[i]; axisN[i] = c.axisN[i]; }
+  span = c.span;
+  calHeight = c.calHeight;
+  return mode != NONE;
+#else
+  return false;
+#endif
+}
 
 // Accel (g) and gyro (deg/s) in one 12-byte I2C burst: gyro X..Z then accel X..Z.
 void readImu(float *a, float *w) {
@@ -135,9 +194,10 @@ void publishReps() {
   if (!bleOk) return;
   uint16_t rom = (uint16_t)constrain(repRom * 1000, 0, 65535);
   uint16_t peak = (uint16_t)constrain(repPeak * 1000, 0, 65535);
-  uint8_t b[8] = { (uint8_t)reps, (uint8_t)(reps >> 8), (uint8_t)mode, (uint8_t)state,
-                   (uint8_t)rom, (uint8_t)(rom >> 8), (uint8_t)peak, (uint8_t)(peak >> 8) };
-  repsChar.writeValue(b, 8);
+  uint8_t b[10] = { (uint8_t)reps, (uint8_t)(reps >> 8), (uint8_t)partials, (uint8_t)(partials >> 8),
+                    (uint8_t)mode, (uint8_t)state,
+                    (uint8_t)rom, (uint8_t)(rom >> 8), (uint8_t)peak, (uint8_t)(peak >> 8) };
+  repsChar.writeValue(b, 10);
 }
 
 void enter(State s) {
@@ -147,25 +207,41 @@ void enter(State s) {
   publishReps();
 }
 
-void startCalibration() {
-  reps = 0;
-  reachedHigh = false;
+void resetCounting() {
+  reps = partials = 0;
+  away = false;
   phase = 0;
-  mode = NONE;
   repRom = repPeak = 0;
+  h = repMaxH = repMinH = 0;
+}
+
+void startCalibration() {
+  resetCounting();
+  mode = NONE;
   printHeader();
-  Serial.println("# calibrate: hold still at point 1");
+  Serial.println("# calibrate: go to point 1 and hold still");
   enter(CAL1);
 }
 
-void countRep() {
-  reps++;
+// fraction = how far towards point 2 this rep went (1 = all the way).
+void endRep(float fraction) {
+  bool full = fraction >= FULL_REP;
+  if (!full && fraction < PARTIAL_REP) return;  // a small wobble, not a rep
+  if (full) reps++; else partials++;
+  flashRed = !full;
   flashUntil = millis() + 200;
-  char line[64];
-  snprintf(line, sizeof line, "# rep %d rom_mm %ld peak_mm_s %ld\r\n", reps, lround(repRom * 1000), lround(repPeak * 1000));
+  repRom = repMaxH - repMinH;
+  char line[96];
+  snprintf(line, sizeof line, "# %s %d reach_pct %ld rom_mm %ld peak_mm_s %ld\r\n",
+           full ? "rep" : "partial", full ? reps : partials, lround(fraction * 100),
+           lround(repRom * 1000), lround(repPeak * 1000));
   Serial.write(line, strlen(line));
   publishReps();
+}
+
+void startRep() {
   repPeak = 0;
+  repMaxH = repMinH = h;
 }
 
 void setupBle() {
@@ -218,7 +294,14 @@ void setup() {
   float wMean[3] = { wSum[0] / 100, wSum[1] / 100, wSum[2] / 100 };
   if (norm(wMean) < 15) for (int i = 0; i < 3; i++) gyroBias[i] = wMean[i];  // only if it was lying still
   setupBle();
-  startCalibration();
+  if (loadCalibration()) {
+    resetCounting();
+    printHeader();
+    Serial.print("# loaded saved calibration, mode "); Serial.println(modeName());
+    enter(CAL2_DONE);  // shows green, then starts counting
+  } else {
+    startCalibration();
+  }
   lastUs = micros();
 }
 
@@ -272,9 +355,10 @@ void loop() {
   h += vz * DT;
 
   float pos = 0;
+  bool blinkOn = (now / 200) % 2 == 0;
   switch (state) {
     case CAL1:
-      led(false, false, true);
+      led(false, false, blinkOn);  // blue blinking
       if (heldStill) {
         for (int i = 0; i < 3; i++) pt1[i] = grav[i];
         scaleTo(pt1, 1);
@@ -284,76 +368,84 @@ void loop() {
       break;
     case CAL1_DONE:
     case CAL2_DONE:
-      led(false, true, false);
-      if (now - stateSince > 1500) {
+      led(false, true, false);  // solid green
+      if (now - stateSince > 1000) {
+        h = 0;
         if (state == CAL1_DONE) {
-          h = 0;
           enter(CAL2);
-          Serial.println("# move to point 2 and hold still");
+          Serial.println("# go to point 2 and hold still");
         } else {
-          h = 0;
           enter(RUN);
-          Serial.println(mode == TILT ? "# ready (tilt): move between the points"
-                                      : "# ready (height): move between the points");
+          startRep();
+          Serial.print("# ready, counting by "); Serial.println(modeName());
         }
       }
       break;
     case CAL2:
-      led(false, false, true);
+      led(blinkOn, false, blinkOn);  // purple blinking
       if (heldStill) {
-        float ang = angleDeg(grav, pt1);
-        if (ang >= MIN_ANGLE_DEG) {
+        float ang = angleDeg(grav, pt1), hgt = fabs(h);
+        bool tiltOk = ang >= MIN_ANGLE_DEG, heightOk = hgt >= MIN_HEIGHT_M;
+        if (tiltOk || heightOk) {
           for (int i = 0; i < 3; i++) pt2[i] = grav[i];
           scaleTo(pt2, 1);
           cross(pt1, pt2, axisN);
           scaleTo(axisN, 1);
           span = ang * DEG_TO_RAD;
-          mode = TILT;
-          Serial.print("# point 2 saved, tilt mode, angle "); Serial.println(ang, 1);
-          enter(CAL2_DONE);
-        } else if (fabs(h) >= MIN_HEIGHT_M) {
-          calHeight = fabs(h);
-          dir = h > 0 ? 1 : -1;
-          mode = HEIGHT;
-          Serial.print("# point 2 saved, height mode, height_cm "); Serial.println(h * 100, 1);
+          calHeight = hgt;
+          dir = h >= 0 ? 1 : -1;
+          float tiltScore = ang / BIG_ANGLE_DEG, heightScore = hgt / BIG_HEIGHT_M;
+          if (tiltScore >= 1 && heightScore >= 1) mode = BOTH;
+          else if (tiltOk && (!heightOk || tiltScore >= heightScore)) mode = TILT;
+          else mode = HEIGHT;
+          char line[96];
+          snprintf(line, sizeof line, "# point 2 saved, mode %s, angle_deg %ld, height_mm %ld\r\n",
+                   modeName(), lround(ang), lround(h * 1000));
+          Serial.write(line, strlen(line));
+          saveCalibration();
           enter(CAL2_DONE);
         }
       }
       break;
     case RUN:
       if (fabs(vz) > repPeak) repPeak = fabs(vz);
-      if (mode == TILT) {
+      if (h > repMaxH) repMaxH = h;
+      if (h < repMinH) repMinH = h;
+      if (mode == TILT || mode == BOTH) {
         pos = tiltPosition();
-        if (pos > POS_HIGH) reachedHigh = true;
-        if (reachedHigh && pos < POS_LOW) {
-          reachedHigh = false;
-          repRom = 0;
-          countRep();
+        if (!away && pos > POS_LEAVE) { away = true; maxPos = pos; startRep(); }
+        if (away) {
+          if (pos > maxPos) maxPos = pos;
+          if (pos < POS_BACK) { away = false; endRep(maxPos); }
         }
-        led(now < flashUntil, false, false);
       } else {
         float v = vz * dir;  // positive = towards point 2
         switch (phase) {
           case 0:
-            if (v > SPEED_GO) { phase = 1; moveStartH = h; repPeak = v; }
+            if (v > SPEED_GO) { phase = 1; moveStartH = h; startRep(); }
             break;
           case 1:
-            if (v < SPEED_END || v < -SPEED_GO) {
-              repRom = (h - moveStartH) * dir;
-              // too short: a twitch or a knock, not a rep
-              phase = repRom >= MIN_ROM_FRACTION * calHeight ? (v < -SPEED_GO ? 3 : 2) : 0;
+            if (v < SPEED_END) {
+              towardRom = (h - moveStartH) * dir;
+              if (towardRom < TWITCH_FRACTION * calHeight) phase = 0;  // a twitch or a knock
+              else { phase = v < -SPEED_GO ? 3 : 2; returnStartH = h; }
             }
             break;
           case 2:
-            if (v < -SPEED_GO) phase = 3;
-            else if (v > SPEED_GO) { phase = 1; }  // kept going up after a pause
+            if (v < -SPEED_GO) { phase = 3; returnStartH = h; }
+            else if (v > SPEED_GO) phase = 1;  // kept going after a pause
             break;
           case 3:
-            if (v > -SPEED_END) { phase = 0; countRep(); }
+            if (v > -SPEED_END) {
+              // Fast moves can read short in one direction, so take the longer leg.
+              float back = (returnStartH - h) * dir;
+              phase = 0;
+              endRep(max(towardRom, back) / calHeight);
+            }
             break;
         }
-        led(false, now < flashUntil, false);
       }
+      led(now < flashUntil && flashRed, now < flashUntil && !flashRed, false);
       break;
   }
 
@@ -361,10 +453,10 @@ void loop() {
     lastSerial = now;
     // One write per row: many small prints over USB slow the loop down.
     char line[128];
-    snprintf(line, sizeof line, "%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%d,%d,%d\r\n", now,
+    snprintf(line, sizeof line, "%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%d,%d,%d,%d\r\n", now,
              lround(a[0] * 1000), lround(a[1] * 1000), lround(a[2] * 1000),
              lround(wRaw[0] * 10), lround(wRaw[1] * 10), lround(wRaw[2] * 10),
-             lround(pos * 1000), lround(vz * 1000), lround(h * 1000), reps, (int)state, (int)mode);
+             lround(pos * 1000), lround(vz * 1000), lround(h * 1000), reps, partials, (int)state, (int)mode);
     Serial.write(line, strlen(line));
   }
 

@@ -17,17 +17,24 @@ arduino-cli monitor -p COM6 --config baudrate=115200 > firmware/band/logs/band.c
 Don't name variables `p1`, `p2`…: those are pin macros in this core.
 Logs in `logs/` are gitignored.
 
-## perform-band (current)
+## perform-band (current, v3)
 
-Two-point calibration, then counts reps either by **tilt** (points ≥ 25° apart, e.g. a curl) or
-by **height** (points ≥ 5 cm apart without tilting, e.g. a squat). Reads the IMU as fast as the
-loop allows (target 200 Hz, integrating over the measured time step), prints integer CSV over USB
-at 50 Hz, and advertises over Bluetooth LE as "PerForm Band" with a reps
-characteristic (rep count, range of motion, peak speed) and an optional 25 Hz IMU stream.
-The protocol is documented at the top of `perform-band.ino`.
+Calibration designed by Miguel (2026-10-31), once per exercise, with the band on the table:
 
-LED: blue = hold still at the current point, green = point saved, then a red flash per rep in
-tilt mode or a green flash per rep in height mode. Send `r` over serial or BLE to calibrate again.
+1. Blue blinking: go to point 1 and hold still; solid green for 1 s when saved.
+2. Purple blinking: go to point 2 and hold still; solid green for 1 s when saved. Point 2 can
+   differ in height (≥ 5 cm), tilt (≥ 15°) or both. The band counts by whichever changed more,
+   or by tilt with height for range of motion when both changed a lot.
+3. The calibration is saved in flash and loaded at power-up. Send `r` over USB or BLE to
+   calibrate for a new exercise.
+
+Counting, LED off: one rep = from point 1 to at least 80% of the way to point 2 and back (short
+green flash). Turning back between 50% and 80% is a partial (short red flash), not a rep.
+
+Reads the IMU as fast as the loop allows (target 200 Hz, integrating over the measured time
+step), prints integer CSV over USB at 50 Hz, and advertises over Bluetooth LE as
+"PerForm Band" with a reps characteristic (reps, partials, range of motion, peak speed) and an
+optional 25 Hz IMU stream. The protocol is documented at the top of `perform-band.ino`.
 
 ## band-test (first experiment)
 
