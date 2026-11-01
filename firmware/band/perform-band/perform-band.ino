@@ -61,6 +61,7 @@ const float STILL_ACC_G = 0.03;        // ...and |accel| within this of gravity
 const float ZUPT_GYRO_DPS = 4.0;
 const float ZUPT_ACC_G = 0.012;
 const unsigned long ZUPT_MS = 150;
+const unsigned long STILL_ZUPT_MS = 400;
 const unsigned long HOLD_MS = 1500;    // still this long -> calibration point saved
 const float MIN_ANGLE_DEG = 15.0;      // point 2 must differ by this much tilt...
 const float MIN_HEIGHT_M = 0.05;       // ...or this much height
@@ -183,7 +184,7 @@ bool loadCalibration() {
   for (int i = 0; i < 3; i++) { pt1[i] = c.pt1[i]; pt2[i] = c.pt2[i]; axisN[i] = c.axisN[i]; }
   span = c.span;
   calHeight = c.calHeight;
-  return mode != NONE;
+  return mode != NONE && calHeight <= MAX_HEIGHT_M;  // older builds could save a drifted height
 #else
   return false;
 #endif
@@ -345,7 +346,9 @@ void loop() {
   bool calmNow = norm(w) < ZUPT_GYRO_DPS && fabs(aMag - gMag) < ZUPT_ACC_G;
   if (!calmNow) calmSince = 0;
   else if (!calmSince) calmSince = now;
-  bool zupt = calmSince && now - calmSince >= ZUPT_MS;
+  // Speed is zero when really calm for a moment, or simply still for longer
+  // (a small sensor offset can keep it from ever looking "really calm").
+  bool zupt = (calmSince && now - calmSince >= ZUPT_MS) || (stillSince && now - stillSince >= STILL_ZUPT_MS);
   bool heldStill = stillSince && now - stillSince >= HOLD_MS;
 
   // Gravity in the board frame turns opposite to the board: dg/dt = -w x g.
@@ -353,11 +356,13 @@ void loop() {
   float om[3] = { w[0] * d2r, w[1] * d2r, w[2] * d2r }, c[3];
   cross(om, grav, c);
   for (int i = 0; i < 3; i++) grav[i] -= c[i] * DT;
-  // Lean on the accelerometer when it reads close to plain gravity.
-  float k = zupt ? 0.05 : (fabs(aMag - gMag) < 0.1 ? 0.005 : 0);
+  // Lean on the accelerometer when it reads close to plain gravity, and fully
+  // when the band is still: then it reads exactly gravity. Otherwise a small gyro
+  // offset tilts the gravity estimate and shows up as a fake vertical acceleration.
+  float k = stillNow ? 0.05 : (fabs(aMag - gMag) < 0.1 ? 0.005 : 0);
   for (int i = 0; i < 3; i++) grav[i] += k * (a[i] - grav[i]);
-  if (zupt) {
-    for (int i = 0; i < 3; i++) gyroBias[i] += 0.002 * (wRaw[i] - gyroBias[i]);
+  if (stillNow) {
+    for (int i = 0; i < 3; i++) gyroBias[i] += 0.01 * (wRaw[i] - gyroBias[i]);
   }
   scaleTo(grav, gMag);
 
@@ -385,7 +390,7 @@ void loop() {
     case CAL2_DONE:
       led(false, true, false);  // solid green
       if (now - stateSince > 1000) {
-        h = 0;
+        h = vz = 0;
         if (state == CAL1_DONE) {
           enter(CAL2);
           Serial.println("# go to point 2 and hold still");
