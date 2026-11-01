@@ -64,6 +64,7 @@ const unsigned long ZUPT_MS = 150;
 const unsigned long HOLD_MS = 1500;    // still this long -> calibration point saved
 const float MIN_ANGLE_DEG = 15.0;      // point 2 must differ by this much tilt...
 const float MIN_HEIGHT_M = 0.05;       // ...or this much height
+const float MAX_HEIGHT_M = 1.2;        // more than this is drift, not a real move
 const float BIG_ANGLE_DEG = 25.0;      // "changed a lot", for picking tilt, height or both
 const float BIG_HEIGHT_M = 0.10;
 const float FULL_REP = 0.8;            // fraction of the way to point 2 for a rep
@@ -363,8 +364,9 @@ void loop() {
   // Vertical acceleration without gravity, up positive (m/s^2).
   float lin = (dot(a, grav) / gMag - gMag) * GRAV;
   if (zupt) vz = 0;
-  // No leak while calibrating point 2: that lift is often slow and the leak would eat it.
-  else vz += (lin - (state == CAL2 ? 0 : LEAK_PER_S) * vz) * DT;
+  // Less leak while calibrating point 2: that lift is often slow and the full leak
+  // would eat part of it. Some leak is still needed, or a tiny offset drifts for metres.
+  else vz += (lin - (state == CAL2 ? LEAK_PER_S / 2 : LEAK_PER_S) * vz) * DT;
   h += vz * DT;
 
   float pos = 0;
@@ -400,6 +402,13 @@ void loop() {
         // Height from when the band came to rest, not after drifting through the hold.
         float ang = angleDeg(grav, pt1), hgt = fabs(hAtStill);
         bool tiltOk = ang >= MIN_ANGLE_DEG, heightOk = hgt >= MIN_HEIGHT_M;
+        if (hgt > MAX_HEIGHT_M) {
+          // Drifted (e.g. picked up and carried around): start the height over.
+          Serial.println("# point 2 height not believable, measuring again");
+          h = hAtStill = 0;
+          stillSince = 0;
+          break;
+        }
         if (tiltOk || heightOk) {
           for (int i = 0; i < 3; i++) pt2[i] = grav[i];
           scaleTo(pt2, 1);
