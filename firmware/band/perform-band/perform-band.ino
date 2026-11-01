@@ -36,7 +36,7 @@
 //   ...0003 stream  (notify, 20 bytes LE, 25 Hz while subscribed): uint16 t_ms (wraps),
 //                   int16 ax,ay,az (mg), int16 gx,gy,gz (0.1 deg/s), int16 pos*1000,
 //                   int16 vz (mm/s), int16 h (mm)
-//   ...0004 control (write, 1 byte): 'r' = recalibrate
+//   ...0004 control (write, 1 byte): 'r' = recalibrate, 'w' = wipe saved calibration and recalibrate
 
 #include <ArduinoBLE.h>
 #include <LSM6DS3.h>
@@ -172,6 +172,13 @@ void saveCalibration() {
 #else
   Serial.println("# no flash storage in this build, calibration not saved");
 #endif
+}
+
+void wipeCalibration() {
+#ifdef HAVE_KV
+  kv_remove("/kv/band_cal");
+#endif
+  Serial.println("# saved calibration wiped");
 }
 
 bool loadCalibration() {
@@ -315,12 +322,18 @@ void setup() {
   lastUs = micros();
 }
 
+// 'r' = calibrate again, 'w' = wipe the saved calibration and calibrate again.
+void command(int c) {
+  if (c == 'w') wipeCalibration();
+  if (c == 'r' || c == 'w') startCalibration();
+}
+
 void loop() {
   if (bleOk) {
     BLE.poll();
-    if (controlChar.written() && controlChar.value() == 'r') startCalibration();
+    if (controlChar.written()) command(controlChar.value());
   }
-  if (Serial.available() && Serial.read() == 'r') startCalibration();
+  if (Serial.available()) command(Serial.read());
 
   unsigned long nowUs = micros();
   if (nowUs - lastUs < PERIOD_US) return;

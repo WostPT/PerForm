@@ -26,7 +26,7 @@ Calibration designed by Miguel (2026-10-31), once per exercise, with the band on
    differ in height (≥ 5 cm), tilt (≥ 15°) or both. The band counts by whichever changed more,
    or by tilt with height for range of motion when both changed a lot.
 3. The calibration is saved in flash and loaded at power-up. Send `r` over USB or BLE to
-   calibrate for a new exercise.
+   calibrate for a new exercise, or `w` to wipe the saved calibration first.
 
 Counting, LED off: one rep = from point 1 to at least 80% of the way to point 2 and back (short
 green flash). Turning back between 50% and 80% is a partial (short red flash), not a rep.
