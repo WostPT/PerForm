@@ -5,7 +5,7 @@
 // and "ArduinoBLE".
 //
 // Calibration, once per exercise (send 'r' over USB or BLE to start a new one):
-//   1. Blue blinking: go to point 1 and hold still. After 1.5 s still the LED is
+//   1. Blue blinking: go to point 1 and hold (a shaky hand is fine). After 1.5 s the LED is
 //      solid green for 1 s: point 1 saved.
 //   2. Purple blinking: go to point 2 and hold still. Solid green 1 s: saved.
 //      Point 2 can differ in height, in tilt, or both. Less than 5 cm and 15 deg
@@ -62,7 +62,11 @@ const float ZUPT_GYRO_DPS = 4.0;
 const float ZUPT_ACC_G = 0.012;
 const unsigned long ZUPT_MS = 150;
 const unsigned long STILL_ZUPT_MS = 400;
-const unsigned long HOLD_MS = 1500;    // still this long -> calibration point saved
+const unsigned long HOLD_MS = 1500;    // held this long -> calibration point saved
+// "Holding" a point tolerates a shaky hand: a real hand wobbles at 10-40 deg/s
+// even when trying to keep still, while a real move turns and accelerates more.
+const float HOLD_GYRO_DPS = 45.0;
+const float HOLD_ACC_G = 0.08;
 const float MIN_ANGLE_DEG = 15.0;      // point 2 must differ by this much tilt...
 const float MIN_HEIGHT_M = 0.05;       // ...or this much height
 const float MAX_HEIGHT_M = 1.2;        // more than this is drift, not a real move
@@ -90,7 +94,7 @@ float vz = 0, h = 0;             // vertical speed (m/s) and height (m)
 float calHeight = 0;             // calibrated height pt1 -> pt2 (m), height mode
 int dir = 1;                     // +1 if point 2 is above point 1
 
-unsigned long stillSince = 0, calmSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
+unsigned long stillSince = 0, calmSince = 0, holdSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
 float hPeak = 0;                 // point 2: furthest height reached since point 1
 unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
@@ -220,7 +224,7 @@ void publishReps() {
 void enter(State s) {
   state = s;
   stateSince = millis();
-  stillSince = 0;
+  stillSince = holdSince = 0;
   publishReps();
 }
 
@@ -361,7 +365,10 @@ void loop() {
   // Speed is zero when really calm for a moment, or simply still for longer
   // (a small sensor offset can keep it from ever looking "really calm").
   bool zupt = (calmSince && now - calmSince >= ZUPT_MS) || (stillSince && now - stillSince >= STILL_ZUPT_MS);
-  bool heldStill = stillSince && now - stillSince >= HOLD_MS;
+  bool holdingNow = norm(w) < HOLD_GYRO_DPS && fabs(aMag - gMag) < HOLD_ACC_G;
+  if (!holdingNow) holdSince = 0;
+  else if (!holdSince) holdSince = now;
+  bool heldStill = holdSince && now - holdSince >= HOLD_MS;
 
   // Gravity in the board frame turns opposite to the board: dg/dt = -w x g.
   const float d2r = DEG_TO_RAD;
@@ -426,7 +433,7 @@ void loop() {
           // Drifted (e.g. picked up and carried around): start the height over.
           Serial.println("# point 2 height not believable, measuring again");
           h = hPeak = 0;
-          stillSince = 0;
+          stillSince = holdSince = 0;
           break;
         }
         if (tiltOk || heightOk) {
