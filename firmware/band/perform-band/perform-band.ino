@@ -95,7 +95,8 @@ float calHeight = 0;             // calibrated height pt1 -> pt2 (m), height mod
 int dir = 1;                     // +1 if point 2 is above point 1
 
 unsigned long stillSince = 0, calmSince = 0, holdSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
-float hPeak = 0;                 // point 2: furthest height reached since point 1
+float hPeak = 0;                 // point 2: height where the last move towards it ended
+bool calMoving = false;          // point 2: a move is under way
 unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
 int reps = 0, partials = 0;
@@ -392,9 +393,13 @@ void loop() {
   // would eat part of it. Some leak is still needed, or a tiny offset drifts for metres.
   else vz += (lin - (state == CAL2 ? LEAK_PER_S / 2 : LEAK_PER_S) * vz) * DT;
   h += vz * DT;
-  // Point 2's height is the furthest the move went: after it stops, a hand is never
-  // quite still and the height slowly slides back before the band counts as still.
-  if (state == CAL2 && fabs(h) > fabs(hPeak)) hPeak = h;
+  // Point 2's height is where the move ended, read the same way a rep's leg is read
+  // (when the speed drops), so calibration and reps share the same measuring errors.
+  // Reading it later would let a shaky hold slide it back; the peak overshoots.
+  if (state == CAL2) {
+    if (!calMoving && fabs(vz) > SPEED_GO) calMoving = true;
+    else if (calMoving && fabs(vz) < SPEED_END) { calMoving = false; hPeak = h; }
+  }
 
   float pos = 0;
   bool blinkOn = (now / 200) % 2 == 0;
@@ -413,6 +418,7 @@ void loop() {
       led(false, true, false);  // solid green
       if (now - stateSince > 1000) {
         h = vz = hPeak = 0;
+        calMoving = false;
         if (state == CAL1_DONE) {
           enter(CAL2);
           Serial.println("# go to point 2 and hold still");
