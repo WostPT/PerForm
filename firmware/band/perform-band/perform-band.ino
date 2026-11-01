@@ -13,7 +13,9 @@
 //   The band follows whichever changed more: tilt, height, or both when both
 //   changed a lot (then tilt counts the reps, as it doesn't drift, and height
 //   gives the range of motion). The calibration is saved in flash and loaded at
-//   power-up (solid green for 1 s, then counting).
+//   power-up (solid green for 1 s, then counting). In height mode the first 3
+//   reps fine-tune point 2's distance (averaged with the calibration move), since
+//   one calibration move is often 10-20% off; the tuned value is saved.
 //
 // Reps, LED off: one rep = from one point to at least 80% of the way to the
 // other and back, starting at either point (e.g. at the top for a squat). Full rep: short green flash. Turned back between 50% and 80%: short
@@ -78,6 +80,8 @@ const float POS_LEAVE = 0.35, POS_BACK = 0.3;  // tilt: left point 1 / back at p
 const float SPEED_GO = 0.10;           // m/s, a move has started
 const float SPEED_END = 0.03;          // m/s, a move has ended
 const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ignored
+const int TUNE_REPS = 3;               // height: fine-tune point 2 from this many first reps
+const float TUNE_MIN = 0.6;            // ...that went at least this far
 const float LEAK_PER_S = 0.2;          // pulls speed back to zero while moving
 
 enum State { CAL1, CAL1_DONE, CAL2, CAL2_DONE, RUN };
@@ -91,7 +95,9 @@ float gyroBias[3] = {0, 0, 0};
 float pt1[3], pt2[3], axisN[3];  // calibration points (unit) and tilt axis
 float span = 1;                  // tilt angle pt1 -> pt2 (rad)
 float vz = 0, h = 0;             // vertical speed (m/s) and height (m)
-float calHeight = 0;             // calibrated height pt1 -> pt2 (m), height mode
+float calHeight = 0;
+float calMeasured = 0, tuneSum = 0;  // height: calibration move and first reps' legs
+int tuned = TUNE_REPS;           // height: first reps used so far for fine-tuning             // calibrated height pt1 -> pt2 (m), height mode
 int dir = 1;                     // +1 if point 2 is above point 1
 
 unsigned long stillSince = 0, calmSince = 0, holdSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
@@ -448,7 +454,9 @@ void loop() {
           cross(pt1, pt2, axisN);
           scaleTo(axisN, 1);
           span = ang * DEG_TO_RAD;
-          calHeight = hgt;
+          calHeight = calMeasured = hgt;
+          tuneSum = 0;
+          tuned = 0;
           dir = hPeak >= 0 ? 1 : -1;
           float tiltScore = ang / BIG_ANGLE_DEG, heightScore = hgt / BIG_HEIGHT_M;
           if (tiltScore >= 1 && heightScore >= 1) mode = BOTH;
@@ -500,7 +508,19 @@ void loop() {
             if ((v > -SPEED_END && back >= 0.5 * towardRom) || zupt) {
               // Fast moves can read short in one direction, so take the longer leg.
               phase = 0;
-              endRep(max(towardRom, back) / calHeight);
+              float leg = max(towardRom, back);
+              // One calibration move is often 10-20% off: average it with the first
+              // few real reps, which are measured the same way.
+              if (tuned < TUNE_REPS && leg >= TUNE_MIN * calHeight) {
+                tuneSum += leg;
+                tuned++;
+                calHeight = (calMeasured + tuneSum) / (1 + tuned);
+                char line[64];
+                snprintf(line, sizeof line, "# point 2 tuned, height_mm %ld\r\n", lround(calHeight * 1000));
+                Serial.write(line, strlen(line));
+                if (tuned == TUNE_REPS) saveCalibration();
+              }
+              endRep(leg / calHeight);
             }
             break;
           }
