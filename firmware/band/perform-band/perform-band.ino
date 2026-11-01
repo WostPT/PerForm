@@ -112,6 +112,7 @@ int home = 0;                    // tilt: starting point of this rep (0 = point 
 float maxReach = 0;              // tilt: furthest reached in this rep, as a fraction of the way
 int phase = 0;                   // height: 0 resting, 1 first leg, 2 turning, 3 coming back
 int legDir = 1;                  // height: +1 if the first leg goes up
+bool legDirKnown = false;        // height: set by the first rep, then every rep starts that way
 float moveStartH = 0, returnStartH = 0, towardRom = 0, repRom = 0, repPeak = 0;
 float repMaxH = 0, repMinH = 0;  // height range in this rep, for the reported ROM
 bool bleOk = false;
@@ -239,6 +240,7 @@ void resetCounting() {
   reps = partials = 0;
   away = false;
   phase = 0;
+  legDirKnown = false;
   repRom = repPeak = 0;
   h = repMaxH = repMinH = 0;
 }
@@ -488,7 +490,14 @@ void loop() {
         float v = vz * legDir;  // positive = along the first leg of this rep
         switch (phase) {
           case 0:
-            if (fabs(vz) > SPEED_GO) { legDir = vz > 0 ? 1 : -1; phase = 1; moveStartH = h; startRep(); }
+            // After the first rep every rep starts the same way, so the tail of a slow
+            // return isn't taken for the start of a new rep.
+            if (fabs(vz) > SPEED_GO && (!legDirKnown || vz * legDir > 0)) {
+              legDir = vz > 0 ? 1 : -1;
+              phase = 1;
+              moveStartH = h;
+              startRep();
+            }
             break;
           case 1:
             if (v < SPEED_END) {
@@ -509,6 +518,7 @@ void loop() {
               // Fast moves can read short in one direction, so take the longer leg.
               phase = 0;
               float leg = max(towardRom, back);
+              legDirKnown = true;
               // One calibration move is often 10-20% off: average it with the first
               // few real reps, which are measured the same way.
               if (tuned < TUNE_REPS && leg >= TUNE_MIN * calHeight) {
