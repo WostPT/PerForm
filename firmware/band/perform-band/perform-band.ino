@@ -79,7 +79,12 @@ const float OFF_PATH_DEG = 40.0;       // tilt: turning this far off the learned
 const float HEIGHT_TILT_DEG = 35.0;    // height: tilting this far from the start position
 const float FULL_REP = 0.8;            // fraction of the learned rep for a rep
 const float PARTIAL_REP = 0.5;         // ...and for a partial
-const float POS_LEAVE = 0.35, POS_BACK = 0.3;  // tilt: left the start / back at the start
+const float POS_LEAVE = 0.35, POS_BACK = 0.3;  // tilt: left the start / nearly back at the start
+// Tilt: once nearly back, the rep is counted where the arm stops (or turns into the
+// next rep), not on the way down, so the flash comes at the start.
+const float POS_HOME = 0.1;            // ...this close to the start counts as back
+const float POS_TURN = 0.03;           // ...or turned this much back towards the far end
+const float STOP_GYRO_DPS = 30.0;      // ...or turning slower than this
 const float SPEED_GO = 0.10;           // m/s, a move has started
 const float SPEED_END = 0.03;          // m/s, a move has ended
 const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ignored
@@ -118,6 +123,8 @@ float leg1 = 0, leg2 = 0;
 int leg1Dir = 1;
 // Counting
 bool away = false;               // tilt: left the start in this rep
+bool returning = false;          // tilt: nearly back, waiting for the arm to stop
+float minPos = 0;                // tilt: closest to the start while returning
 float maxReach = 0;              // tilt: furthest reached in this rep, as a fraction of the way
 int phase = 0;                   // height: 0 resting, 1 first leg, 2 turning, 3 coming back
 float moveStartH = 0, returnStartH = 0, towardRom = 0, repRom = 0, repPeak = 0;
@@ -261,7 +268,7 @@ void startRep() {
 // A new set: counts back to 0, same exercise.
 void resetCounting() {
   reps = partials = 0;
-  away = offPath = false;
+  away = returning = offPath = false;
   phase = 0;
   repRom = repPeak = 0;
   h = repMaxH = repMinH = 0;
@@ -524,7 +531,18 @@ void loop() {
           float off = offPathDeg();
           if (off > repOff) repOff = off;
           if (off > OFF_PATH_DEG) offPath = true;
-          if (pos < POS_BACK) { away = false; endRep(maxReach); }
+          if (!returning && pos < POS_BACK) { returning = true; minPos = pos; }
+          if (returning) {
+            if (pos < minPos) minPos = pos;
+            if (pos < POS_HOME || pos > minPos + POS_TURN || norm(w) < STOP_GYRO_DPS) {
+              away = returning = false;
+              endRep(maxReach);
+              // The arm is about stopped at the start: a good moment to clear the height
+              // integration, which otherwise drifts over fast reps and spoils the ROM.
+              vz = 0;
+              h = 0;
+            }
+          }
         }
       } else {
         float v = vz * legDir;  // positive = the way the learned rep went first
