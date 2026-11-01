@@ -91,7 +91,7 @@ float calHeight = 0;             // calibrated height pt1 -> pt2 (m), height mod
 int dir = 1;                     // +1 if point 2 is above point 1
 
 unsigned long stillSince = 0, calmSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
-float hAtStill = 0;              // height when the band last came to rest
+float hPeak = 0;                 // point 2: furthest height reached since point 1
 unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
 int reps = 0, partials = 0;
@@ -353,7 +353,6 @@ void loop() {
   bool gyroStill = norm(w) < STILL_GYRO_DPS;
   if (gyroStill && fabs(aMag - gMag) < 0.15) gMag += 0.001 * (aMag - gMag);
   bool stillNow = gyroStill && fabs(aMag - gMag) < STILL_ACC_G;
-  if (stillNow && !stillSince) hAtStill = h;
   if (!stillNow) stillSince = 0;
   else if (!stillSince) stillSince = now;
   bool calmNow = norm(w) < ZUPT_GYRO_DPS && fabs(aMag - gMag) < ZUPT_ACC_G;
@@ -386,6 +385,9 @@ void loop() {
   // would eat part of it. Some leak is still needed, or a tiny offset drifts for metres.
   else vz += (lin - (state == CAL2 ? LEAK_PER_S / 2 : LEAK_PER_S) * vz) * DT;
   h += vz * DT;
+  // Point 2's height is the furthest the move went: after it stops, a hand is never
+  // quite still and the height slowly slides back before the band counts as still.
+  if (state == CAL2 && fabs(h) > fabs(hPeak)) hPeak = h;
 
   float pos = 0;
   bool blinkOn = (now / 200) % 2 == 0;
@@ -403,7 +405,7 @@ void loop() {
     case CAL2_DONE:
       led(false, true, false);  // solid green
       if (now - stateSince > 1000) {
-        h = vz = 0;
+        h = vz = hPeak = 0;
         if (state == CAL1_DONE) {
           enter(CAL2);
           Serial.println("# go to point 2 and hold still");
@@ -417,13 +419,13 @@ void loop() {
     case CAL2:
       led(blinkOn, false, blinkOn);  // purple blinking
       if (heldStill) {
-        // Height from when the band came to rest, not after drifting through the hold.
-        float ang = angleDeg(grav, pt1), hgt = fabs(hAtStill);
+        // Height = how far the move went, not where it slid back to during the hold.
+        float ang = angleDeg(grav, pt1), hgt = fabs(hPeak);
         bool tiltOk = ang >= MIN_ANGLE_DEG, heightOk = hgt >= MIN_HEIGHT_M;
         if (hgt > MAX_HEIGHT_M) {
           // Drifted (e.g. picked up and carried around): start the height over.
           Serial.println("# point 2 height not believable, measuring again");
-          h = hAtStill = 0;
+          h = hPeak = 0;
           stillSince = 0;
           break;
         }
@@ -434,14 +436,14 @@ void loop() {
           scaleTo(axisN, 1);
           span = ang * DEG_TO_RAD;
           calHeight = hgt;
-          dir = hAtStill >= 0 ? 1 : -1;
+          dir = hPeak >= 0 ? 1 : -1;
           float tiltScore = ang / BIG_ANGLE_DEG, heightScore = hgt / BIG_HEIGHT_M;
           if (tiltScore >= 1 && heightScore >= 1) mode = BOTH;
           else if (tiltOk && (!heightOk || tiltScore >= heightScore)) mode = TILT;
           else mode = HEIGHT;
           char line[96];
           snprintf(line, sizeof line, "# point 2 saved, mode %s, angle_deg %ld, height_mm %ld\r\n",
-                   modeName(), lround(ang), lround(hAtStill * 1000));
+                   modeName(), lround(ang), lround(hPeak * 1000));
           Serial.write(line, strlen(line));
           saveCalibration();
           enter(CAL2_DONE);
