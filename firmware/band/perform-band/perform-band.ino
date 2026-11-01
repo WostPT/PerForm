@@ -1,36 +1,34 @@
-// PerForm band firmware v3: Miguel's calibration design (2026-10-31).
+// PerForm band firmware v4: learn the exercise from one slow rep (2026-11-01).
 //
 // Board: Seeed XIAO nRF52840 Sense, core "Seeed nRF52 mbed-enabled Boards"
 // (FQBN Seeeduino:mbed:xiaonRF52840Sense), libraries "Seeed Arduino LSM6DS3"
 // and "ArduinoBLE".
 //
-// Calibration, once per exercise (send 'r' over USB or BLE to start a new one):
-//   1. Blue blinking: go to point 1 and hold (a shaky hand is fine). After 1.5 s the LED is
-//      solid green for 1 s: point 1 saved.
-//   2. Purple blinking: go to point 2 and hold still. Solid green 1 s: saved.
-//      Point 2 can differ in height, in tilt, or both. Less than 5 cm and 15 deg
-//      is not enough: it keeps blinking purple.
-//   The band follows whichever changed more: tilt, height, or both when both
-//   changed a lot (then tilt counts the reps, as it doesn't drift, and height
-//   gives the range of motion). The calibration is saved in flash and loaded at
-//   power-up (solid green for 1 s, then counting). In height mode the first 3
-//   reps fine-tune point 2's distance (averaged with the calibration move), since
-//   one calibration move is often 10-20% off; the tuned value is saved.
+// Learning, once per exercise (send 'r' over USB or BLE to learn a new one):
+//   1. Blue blinking: get into the start position of the exercise and hold it
+//      (a shaky hand is fine) for 1 s.
+//   2. Solid purple: do one slow, full rep and come back to the start. Hold there.
+//   3. Solid green for 1 s: learned and saved on the chip, counting starts.
+//   The band learns the start position, how far the rep goes and which way it
+//   goes. It counts by tilt when the band turns at least 15 deg during the rep
+//   (a curl, a raise), otherwise by height when it moves at least 5 cm (a squat,
+//   a press with the wrist kept straight). In height mode the first 3 reps
+//   fine-tune the distance. The learned rep is loaded again at power-up.
 //
-// Reps, LED off: one rep = from one point to at least 80% of the way to the
-// other and back, starting at either point (e.g. at the top for a squat). Full rep: short green flash. Turned back between 50% and 80%: short
-// red flash, counted as a partial, not a rep.
-//
-// Height comes from the accelerometer with gravity taken out, integrated into
-// vertical speed. Speed is reset to zero whenever the band is still and is
-// pulled gently back to zero while moving, so it doesn't drift.
+// Reps, LED off: one rep = from the start position to at least 80% of the
+// learned rep and back. Full rep: short green flash. Turned back between 50% and
+// 80%: short red flash, counted as a partial, not a rep.
+// Moves that don't follow the learned rep are ignored (no flash): turning off its
+// path by more than 40 deg (tilt), or tilting more than 35 deg away from the start
+// position (height), as happens when swinging the arms while walking around.
 //
 // USB serial (115200) prints CSV at 50 Hz, integers only:
 //   t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,partials,state,mode
-// accel in mg, gyro in 0.1 deg/s, pos = tilt position x1000 (0 at point 1,
-// 1000 at point 2), vz = vertical speed (mm/s, up positive), h = height (mm).
-// state: 0 point 1, 1 point 1 saved, 2 point 2, 3 point 2 saved, 4 counting.
-// mode: 0 none, 1 tilt, 2 height, 3 both. Lines starting with '#' are events.
+// accel in mg, gyro in 0.1 deg/s, pos = tilt position x1000 (0 at the start,
+// 1000 at the far end of the learned rep), vz = vertical speed (mm/s, up
+// positive), h = height (mm).
+// state: 0 hold the start, 1 do the slow rep, 2 learned (green), 3 counting.
+// mode: 0 none, 1 tilt, 2 height. Lines starting with '#' are events.
 //
 // Bluetooth LE, name "PerForm Band", service 8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10:
 //   ...0002 reps    (read/notify, 10 bytes LE): uint16 reps, uint16 partials,
@@ -38,7 +36,8 @@
 //   ...0003 stream  (notify, 20 bytes LE, 25 Hz while subscribed): uint16 t_ms (wraps),
 //                   int16 ax,ay,az (mg), int16 gx,gy,gz (0.1 deg/s), int16 pos*1000,
 //                   int16 vz (mm/s), int16 h (mm)
-//   ...0004 control (write, 1 byte): 'r' = recalibrate, 'w' = wipe saved calibration and recalibrate
+//   ...0004 control (write, 1 byte): 'r' = learn a new exercise, 'n' = new set
+//                   (counts back to 0, same exercise), 'w' = wipe the saved rep and learn again
 
 #include <ArduinoBLE.h>
 #include <LSM6DS3.h>
@@ -64,68 +63,75 @@ const float ZUPT_GYRO_DPS = 4.0;
 const float ZUPT_ACC_G = 0.012;
 const unsigned long ZUPT_MS = 150;
 const unsigned long STILL_ZUPT_MS = 400;
-const unsigned long HOLD_MS = 1500;    // held this long -> calibration point saved
-// "Holding" a point tolerates a shaky hand: a real hand wobbles at 10-40 deg/s
-// even when trying to keep still, while a real move turns and accelerates more.
+// "Holding" tolerates a shaky hand: a real hand wobbles at 10-40 deg/s even
+// when trying to keep still, while a real move turns and accelerates more.
 const float HOLD_GYRO_DPS = 45.0;
 const float HOLD_ACC_G = 0.08;
-const float MIN_ANGLE_DEG = 15.0;      // point 2 must differ by this much tilt...
-const float MIN_HEIGHT_M = 0.05;       // ...or this much height
+const unsigned long START_HOLD_MS = 1000;  // hold the start this long
+const unsigned long END_HOLD_MS = 700;     // ...and again after the slow rep
+const float MIN_ANGLE_DEG = 15.0;      // the learned rep must turn this much (tilt)...
+const float MIN_HEIGHT_M = 0.05;       // ...or move this much (height)
+const float TILT_OVER_HEIGHT_DEG = 25.0;   // from this angle tilt wins even if height moved a lot
+const float BIG_HEIGHT_M = 0.10;       // below that angle, height wins from this distance
 const float MAX_HEIGHT_M = 1.2;        // more than this is drift, not a real move
-const float BIG_ANGLE_DEG = 25.0;      // "changed a lot", for picking tilt, height or both
-const float BIG_HEIGHT_M = 0.10;
-const float FULL_REP = 0.8;            // fraction of the way to point 2 for a rep
+const float BACK_FRACTION = 0.3;       // back at the start: within this much of the way
+const float OFF_PATH_DEG = 40.0;       // tilt: turning this far off the learned path
+const float HEIGHT_TILT_DEG = 35.0;    // height: tilting this far from the start position
+const float FULL_REP = 0.8;            // fraction of the learned rep for a rep
 const float PARTIAL_REP = 0.5;         // ...and for a partial
-const float POS_LEAVE = 0.35, POS_BACK = 0.3;  // tilt: left point 1 / back at point 1
+const float POS_LEAVE = 0.35, POS_BACK = 0.3;  // tilt: left the start / back at the start
 const float SPEED_GO = 0.10;           // m/s, a move has started
 const float SPEED_END = 0.03;          // m/s, a move has ended
 const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ignored
-const int TUNE_REPS = 3;               // height: fine-tune point 2 from this many first reps
+const int TUNE_REPS = 3;               // height: fine-tune the distance from this many first reps
 const float TUNE_MIN = 0.6;            // ...that went at least this far
 const float LEAK_PER_S = 0.2;          // pulls speed back to zero while moving
 
-enum State { CAL1, CAL1_DONE, CAL2, CAL2_DONE, RUN };
-enum Mode { NONE, TILT, HEIGHT, BOTH };
-State state = CAL1;
+enum State { LEARN_START, LEARN_REP, LEARNED, RUN };
+enum Mode { NONE, TILT, HEIGHT };
+State state = LEARN_START;
 Mode mode = NONE;
 
 float grav[3] = {0, 0, 1};       // gravity in board frame (g), tracked with the gyro
 float gMag = 1.0;                // gravity magnitude as this sensor reads it at rest
 float gyroBias[3] = {0, 0, 0};
-float pt1[3], pt2[3], axisN[3];  // calibration points (unit) and tilt axis
-float span = 1;                  // tilt angle pt1 -> pt2 (rad)
+float pt1[3], pt2[3], axisN[3];  // start position, far end of the learned rep (unit), tilt axis
+float span = 1;                  // tilt angle start -> far end (rad)
 float vz = 0, h = 0;             // vertical speed (m/s) and height (m)
-float calHeight = 0;
-float calMeasured = 0, tuneSum = 0;  // height: calibration move and first reps' legs
-int tuned = TUNE_REPS;           // height: first reps used so far for fine-tuning             // calibrated height pt1 -> pt2 (m), height mode
-int dir = 1;                     // +1 if point 2 is above point 1
+float calHeight = 0;             // height mode: learned distance (m)
+float calMeasured = 0, tuneSum = 0;  // height: learned rep and first reps' legs
+int tuned = TUNE_REPS;           // height: first reps used so far for fine-tuning
+int legDir = 1;                  // height: +1 if a rep goes up first
 
 unsigned long stillSince = 0, calmSince = 0, holdSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
-float hPeak = 0;                 // point 2: height where the last move towards it ended
-bool calMoving = false;          // point 2: a move is under way
 unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
 int reps = 0, partials = 0;
-// A rep can start at either point: it goes to the other one and comes back.
-bool away = false;               // tilt: left the starting point in this rep
-int home = 0;                    // tilt: starting point of this rep (0 = point 1, 1 = point 2)
+bool offPath = false;            // this rep left the learned path: ignore it
+float repOff = 0;                // furthest off the learned path in this rep (deg), logged
+// Learning the slow rep
+float maxAng = 0;                // furthest turned from the start (deg)
+bool learnMoving = false;        // a height move is under way
+float learnFromH = 0;            // ...and where it started
+int legs = 0;                    // height legs of at least MIN_HEIGHT_M measured so far
+float leg1 = 0, leg2 = 0;
+int leg1Dir = 1;
+// Counting
+bool away = false;               // tilt: left the start in this rep
 float maxReach = 0;              // tilt: furthest reached in this rep, as a fraction of the way
 int phase = 0;                   // height: 0 resting, 1 first leg, 2 turning, 3 coming back
-int legDir = 1;                  // height: +1 if the first leg goes up
-bool legDirKnown = false;        // height: set by the first rep, then every rep starts that way
 float moveStartH = 0, returnStartH = 0, towardRom = 0, repRom = 0, repPeak = 0;
 float repMaxH = 0, repMinH = 0;  // height range in this rep, for the reported ROM
 bool bleOk = false;
 
-// Saved calibration, so it survives unplugging.
+// Saved learned rep, so it survives unplugging.
 struct Calibration {
   uint32_t magic;
   uint8_t mode;
-  int8_t dir;
+  int8_t legDir;
   float pt1[3], pt2[3], axisN[3], span, calHeight;
 };
-const uint32_t CAL_MAGIC = 0x50464233;  // "PFB3"
-
+const uint32_t CAL_MAGIC = 0x50464234;  // "PFB4"
 
 BLEService bandService("8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10");
 BLECharacteristic repsChar("8c1f0002-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLERead | BLENotify, 10);
@@ -158,8 +164,8 @@ float angleDeg(const float *a, const float *b) {
   return acos(c) * 180.0 / PI;
 }
 
-// Signed angle from pt1 to the current gravity, around the pt1->pt2 axis,
-// as a fraction of the pt1->pt2 angle.
+// Signed angle from the start to the current gravity, around the learned axis,
+// as a fraction of the learned rep's angle.
 float tiltPosition() {
   float u[3] = { grav[0], grav[1], grav[2] };
   scaleTo(u, 1);
@@ -168,21 +174,28 @@ float tiltPosition() {
   return atan2(dot(c, axisN), dot(pt1, ip)) / span;
 }
 
+// How far (deg) the band has turned off the plane the learned rep turns in.
+float offPathDeg() {
+  float u[3] = { grav[0], grav[1], grav[2] };
+  scaleTo(u, 1);
+  return asin(constrain(fabs(dot(u, axisN)), 0.0f, 1.0f)) * 180.0 / PI;
+}
+
 void printHeader() { Serial.println("t_ms,ax_mg,ay_mg,az_mg,gx_ddps,gy_ddps,gz_ddps,pos_milli,vz_mm_s,h_mm,reps,partials,state,mode"); }
 
 const char *modeName() {
-  return mode == TILT ? "tilt" : mode == HEIGHT ? "height" : mode == BOTH ? "both" : "none";
+  return mode == TILT ? "tilt" : mode == HEIGHT ? "height" : "none";
 }
 
 void saveCalibration() {
 #ifdef HAVE_KV
-  Calibration c = { CAL_MAGIC, (uint8_t)mode, (int8_t)dir,
+  Calibration c = { CAL_MAGIC, (uint8_t)mode, (int8_t)legDir,
                     { pt1[0], pt1[1], pt1[2] }, { pt2[0], pt2[1], pt2[2] },
                     { axisN[0], axisN[1], axisN[2] }, span, calHeight };
   int err = kv_set("/kv/band_cal", &c, sizeof c, 0);
-  Serial.println(err == 0 ? "# calibration saved to flash" : "# could not save calibration");
+  Serial.println(err == 0 ? "# learned rep saved to flash" : "# could not save learned rep");
 #else
-  Serial.println("# no flash storage in this build, calibration not saved");
+  Serial.println("# no flash storage in this build, learned rep not saved");
 #endif
 }
 
@@ -190,20 +203,22 @@ void wipeCalibration() {
 #ifdef HAVE_KV
   kv_remove("/kv/band_cal");
 #endif
-  Serial.println("# saved calibration wiped");
+  Serial.println("# saved rep wiped");
 }
 
 bool loadCalibration() {
 #ifdef HAVE_KV
   Calibration c;
   size_t got = 0;
+  // Older builds saved two held points under another magic: those are ignored.
   if (kv_get("/kv/band_cal", &c, sizeof c, &got) != 0 || got != sizeof c || c.magic != CAL_MAGIC) return false;
   mode = (Mode)c.mode;
-  dir = c.dir;
+  legDir = c.legDir;
   for (int i = 0; i < 3; i++) { pt1[i] = c.pt1[i]; pt2[i] = c.pt2[i]; axisN[i] = c.axisN[i]; }
   span = c.span;
   calHeight = c.calHeight;
-  return mode != NONE && calHeight <= MAX_HEIGHT_M;  // older builds could save a drifted height
+  tuned = TUNE_REPS;  // keep what was saved
+  return (mode == TILT || mode == HEIGHT) && calHeight <= MAX_HEIGHT_M;
 #else
   return false;
 #endif
@@ -236,42 +251,83 @@ void enter(State s) {
   publishReps();
 }
 
+void startRep() {
+  repPeak = 0;
+  repMaxH = repMinH = h;
+  offPath = false;
+  repOff = 0;
+}
+
+// A new set: counts back to 0, same exercise.
 void resetCounting() {
   reps = partials = 0;
-  away = false;
+  away = offPath = false;
   phase = 0;
-  legDirKnown = false;
   repRom = repPeak = 0;
   h = repMaxH = repMinH = 0;
 }
 
-void startCalibration() {
+void startLearning() {
   resetCounting();
   mode = NONE;
   printHeader();
-  Serial.println("# calibrate: go to point 1 and hold still");
-  enter(CAL1);
+  Serial.println("# learn: get into the start position and hold it");
+  enter(LEARN_START);
 }
 
-// fraction = how far towards point 2 this rep went (1 = all the way).
+// fraction = how far this rep went, compared to the learned rep (1 = all the way).
 void endRep(float fraction) {
+  char line[112];
+  if (offPath) {
+    snprintf(line, sizeof line, "# ignored, off the learned path, reach_pct %ld off_deg %ld\r\n",
+             lround(fraction * 100), lround(repOff));
+    Serial.write(line, strlen(line));
+    return;
+  }
   bool full = fraction >= FULL_REP;
   if (!full && fraction < PARTIAL_REP) return;  // a small wobble, not a rep
   if (full) reps++; else partials++;
   flashRed = !full;
   flashUntil = millis() + 200;
   repRom = repMaxH - repMinH;
-  char line[96];
-  snprintf(line, sizeof line, "# %s %d reach_pct %ld rom_mm %ld peak_mm_s %ld\r\n",
+  snprintf(line, sizeof line, "# %s %d reach_pct %ld rom_mm %ld peak_mm_s %ld off_deg %ld\r\n",
            full ? "rep" : "partial", full ? reps : partials, lround(fraction * 100),
-           lround(repRom * 1000), lround(repPeak * 1000));
+           lround(repRom * 1000), lround(repPeak * 1000), lround(repOff));
   Serial.write(line, strlen(line));
   publishReps();
 }
 
-void startRep() {
-  repPeak = 0;
-  repMaxH = repMinH = h;
+// The slow rep is done: work out how to count this exercise.
+void finishLearning() {
+  float longest = max(leg1, leg2);
+  bool tiltOk = maxAng >= MIN_ANGLE_DEG;
+  bool heightOk = legs >= 2;
+  if (tiltOk && (maxAng >= TILT_OVER_HEIGHT_DEG || !heightOk || longest < BIG_HEIGHT_M)) mode = TILT;
+  else mode = HEIGHT;
+  cross(pt1, pt2, axisN);
+  scaleTo(axisN, 1);
+  span = maxAng * DEG_TO_RAD;
+  // Fast moves can read short in one direction, so take the longer leg (as for reps).
+  calHeight = calMeasured = longest;
+  tuneSum = 0;
+  tuned = 0;
+  legDir = leg1Dir;
+  char line[112];
+  snprintf(line, sizeof line, "# learned, mode %s, angle_deg %ld, height_mm %ld, first leg %s\r\n",
+           modeName(), lround(maxAng), lround(longest * 1000), legDir > 0 ? "up" : "down");
+  Serial.write(line, strlen(line));
+  saveCalibration();
+  enter(LEARNED);
+}
+
+void restartLearnRep(const char *why) {
+  Serial.println(why);
+  h = vz = 0;
+  maxAng = 0;
+  legs = 0;
+  leg1 = leg2 = 0;
+  learnMoving = false;
+  for (int i = 0; i < 3; i++) pt2[i] = pt1[i];
 }
 
 void setupBle() {
@@ -327,18 +383,24 @@ void setup() {
   if (loadCalibration()) {
     resetCounting();
     printHeader();
-    Serial.print("# loaded saved calibration, mode "); Serial.println(modeName());
-    enter(CAL2_DONE);  // shows green, then starts counting
+    Serial.print("# loaded saved rep, mode "); Serial.println(modeName());
+    enter(LEARNED);  // shows green, then starts counting
   } else {
-    startCalibration();
+    startLearning();
   }
   lastUs = micros();
 }
 
-// 'r' = calibrate again, 'w' = wipe the saved calibration and calibrate again.
+// 'r' = learn a new exercise, 'n' = new set, 'w' = wipe the saved rep and learn again.
 void command(int c) {
   if (c == 'w') wipeCalibration();
-  if (c == 'r' || c == 'w') startCalibration();
+  if (c == 'r' || c == 'w') startLearning();
+  if (c == 'n' && state == RUN) {
+    resetCounting();
+    startRep();
+    Serial.println("# new set");
+    publishReps();
+  }
 }
 
 void loop() {
@@ -377,7 +439,7 @@ void loop() {
   bool holdingNow = norm(w) < HOLD_GYRO_DPS && fabs(aMag - gMag) < HOLD_ACC_G;
   if (!holdingNow) holdSince = 0;
   else if (!holdSince) holdSince = now;
-  bool heldStill = holdSince && now - holdSince >= HOLD_MS;
+  unsigned long heldMs = holdSince ? now - holdSince : 0;
 
   // Gravity in the board frame turns opposite to the board: dg/dt = -w x g.
   const float d2r = DEG_TO_RAD;
@@ -397,103 +459,85 @@ void loop() {
   // Vertical acceleration without gravity, up positive (m/s^2).
   float lin = (dot(a, grav) / gMag - gMag) * GRAV;
   if (zupt) vz = 0;
-  // Less leak while calibrating point 2: that lift is often slow and the full leak
+  // Less leak during the slow rep: a slow lift barely accelerates and the full leak
   // would eat part of it. Some leak is still needed, or a tiny offset drifts for metres.
-  else vz += (lin - (state == CAL2 ? LEAK_PER_S / 2 : LEAK_PER_S) * vz) * DT;
+  else vz += (lin - (state == LEARN_REP ? LEAK_PER_S / 2 : LEAK_PER_S) * vz) * DT;
   h += vz * DT;
-  // Point 2's height is where the move ended, read the same way a rep's leg is read
-  // (when the speed drops), so calibration and reps share the same measuring errors.
-  // Reading it later would let a shaky hold slide it back; the peak overshoots.
-  if (state == CAL2) {
-    if (!calMoving && fabs(vz) > SPEED_GO) calMoving = true;
-    else if (calMoving && fabs(vz) < SPEED_END) { calMoving = false; hPeak = h; }
-  }
 
   float pos = 0;
   bool blinkOn = (now / 200) % 2 == 0;
   switch (state) {
-    case CAL1:
+    case LEARN_START:
       led(false, false, blinkOn);  // blue blinking
-      if (heldStill) {
+      if (heldMs >= START_HOLD_MS) {
         for (int i = 0; i < 3; i++) pt1[i] = grav[i];
         scaleTo(pt1, 1);
-        Serial.println("# point 1 saved");
-        enter(CAL1_DONE);
+        restartLearnRep("# start saved, now one slow full rep and back");
+        enter(LEARN_REP);
       }
       break;
-    case CAL1_DONE:
-    case CAL2_DONE:
+    case LEARN_REP: {
+      led(true, false, true);  // solid purple
+      float ang = angleDeg(grav, pt1);
+      if (ang > maxAng) {
+        maxAng = ang;
+        for (int i = 0; i < 3; i++) pt2[i] = grav[i];
+        scaleTo(pt2, 1);
+      }
+      // Each leg's length is read where the move ends (when the speed drops), the
+      // same way a rep's leg is read, so learning and counting share the same errors.
+      if (!learnMoving && fabs(vz) > SPEED_GO) { learnMoving = true; learnFromH = h; }
+      else if (learnMoving && fabs(vz) < SPEED_END) {
+        learnMoving = false;
+        float leg = fabs(h - learnFromH);
+        if (leg > MAX_HEIGHT_M) { restartLearnRep("# height not believable, do the slow rep again"); break; }
+        if (leg >= MIN_HEIGHT_M) {
+          legs++;
+          if (legs == 1) { leg1 = leg; leg1Dir = h > learnFromH ? 1 : -1; }
+          else if (legs == 2) leg2 = leg;
+        }
+      }
+      // Done when back at the start and holding again, after a rep that turned or moved enough.
+      bool back = ang < max(BACK_FRACTION * maxAng, 8.0f);
+      bool enough = maxAng >= MIN_ANGLE_DEG || legs >= 2;
+      if (back && enough && heldMs >= END_HOLD_MS) finishLearning();
+      break;
+    }
+    case LEARNED:
       led(false, true, false);  // solid green
       if (now - stateSince > 1000) {
-        h = vz = hPeak = 0;
-        calMoving = false;
-        if (state == CAL1_DONE) {
-          enter(CAL2);
-          Serial.println("# go to point 2 and hold still");
-        } else {
-          enter(RUN);
-          startRep();
-          Serial.print("# ready, counting by "); Serial.println(modeName());
-        }
-      }
-      break;
-    case CAL2:
-      led(blinkOn, false, blinkOn);  // purple blinking
-      if (heldStill) {
-        // Height = how far the move went, not where it slid back to during the hold.
-        float ang = angleDeg(grav, pt1), hgt = fabs(hPeak);
-        bool tiltOk = ang >= MIN_ANGLE_DEG, heightOk = hgt >= MIN_HEIGHT_M;
-        if (hgt > MAX_HEIGHT_M) {
-          // Drifted (e.g. picked up and carried around): start the height over.
-          Serial.println("# point 2 height not believable, measuring again");
-          h = hPeak = 0;
-          stillSince = holdSince = 0;
-          break;
-        }
-        if (tiltOk || heightOk) {
-          for (int i = 0; i < 3; i++) pt2[i] = grav[i];
-          scaleTo(pt2, 1);
-          cross(pt1, pt2, axisN);
-          scaleTo(axisN, 1);
-          span = ang * DEG_TO_RAD;
-          calHeight = calMeasured = hgt;
-          tuneSum = 0;
-          tuned = 0;
-          dir = hPeak >= 0 ? 1 : -1;
-          float tiltScore = ang / BIG_ANGLE_DEG, heightScore = hgt / BIG_HEIGHT_M;
-          if (tiltScore >= 1 && heightScore >= 1) mode = BOTH;
-          else if (tiltOk && (!heightOk || tiltScore >= heightScore)) mode = TILT;
-          else mode = HEIGHT;
-          char line[96];
-          snprintf(line, sizeof line, "# point 2 saved, mode %s, angle_deg %ld, height_mm %ld\r\n",
-                   modeName(), lround(ang), lround(hPeak * 1000));
-          Serial.write(line, strlen(line));
-          saveCalibration();
-          enter(CAL2_DONE);
-        }
+        h = vz = 0;
+        enter(RUN);
+        startRep();
+        Serial.print("# ready, counting by "); Serial.println(modeName());
       }
       break;
     case RUN:
       if (fabs(vz) > repPeak) repPeak = fabs(vz);
       if (h > repMaxH) repMaxH = h;
       if (h < repMinH) repMinH = h;
-      if (mode == TILT || mode == BOTH) {
+      if (mode == TILT) {
         pos = tiltPosition();
-        if (!away) home = pos < 0.5 ? 0 : 1;
-        float reach = home == 0 ? pos : 1 - pos;
-        if (!away && reach > POS_LEAVE) { away = true; maxReach = reach; startRep(); }
+        if (!away && pos > POS_LEAVE) { away = true; maxReach = pos; startRep(); }
         if (away) {
-          if (reach > maxReach) maxReach = reach;
-          if (reach < POS_BACK) { away = false; endRep(maxReach); }
+          if (pos > maxReach) maxReach = pos;
+          float off = offPathDeg();
+          if (off > repOff) repOff = off;
+          if (off > OFF_PATH_DEG) offPath = true;
+          if (pos < POS_BACK) { away = false; endRep(maxReach); }
         }
       } else {
-        float v = vz * legDir;  // positive = along the first leg of this rep
+        float v = vz * legDir;  // positive = the way the learned rep went first
+        if (phase != 0) {
+          float off = angleDeg(grav, pt1);
+          if (off > repOff) repOff = off;
+          if (off > HEIGHT_TILT_DEG) offPath = true;
+        }
         switch (phase) {
           case 0:
-            // After the first rep every rep starts the same way, so the tail of a slow
+            // Every rep starts the way the learned rep did, so the tail of a slow
             // return isn't taken for the start of a new rep.
-            if (fabs(vz) > SPEED_GO && (!legDirKnown || vz * legDir > 0)) {
-              legDir = vz > 0 ? 1 : -1;
+            if (v > SPEED_GO) {
               phase = 1;
               moveStartH = h;
               startRep();
@@ -512,21 +556,20 @@ void loop() {
             break;
           case 3: {
             // The rep ends back near where it started: at least halfway back (or when
-            // the band stops), so the flash comes at the start point, not at the turn.
+            // the band stops), so the flash comes at the start, not at the turn.
             float back = (returnStartH - h) * legDir;
             if ((v > -SPEED_END && back >= 0.5 * towardRom) || zupt) {
               // Fast moves can read short in one direction, so take the longer leg.
               phase = 0;
               float leg = max(towardRom, back);
-              legDirKnown = true;
-              // One calibration move is often 10-20% off: average it with the first
-              // few real reps, which are measured the same way.
-              if (tuned < TUNE_REPS && leg >= TUNE_MIN * calHeight) {
+              // One slow rep is often 10-20% off: average it with the first few
+              // real reps, which are measured the same way.
+              if (!offPath && tuned < TUNE_REPS && leg >= TUNE_MIN * calHeight) {
                 tuneSum += leg;
                 tuned++;
                 calHeight = (calMeasured + tuneSum) / (1 + tuned);
                 char line[64];
-                snprintf(line, sizeof line, "# point 2 tuned, height_mm %ld\r\n", lround(calHeight * 1000));
+                snprintf(line, sizeof line, "# distance tuned, height_mm %ld\r\n", lround(calHeight * 1000));
                 Serial.write(line, strlen(line));
                 if (tuned == TUNE_REPS) saveCalibration();
               }

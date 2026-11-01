@@ -17,20 +17,22 @@ arduino-cli monitor -p COM6 --config baudrate=115200 > firmware/band/logs/band.c
 Don't name variables `p1`, `p2`…: those are pin macros in this core.
 Logs in `logs/` are gitignored.
 
-## perform-band (current, v3)
+## perform-band (current, v4)
 
-Calibration designed by Miguel (2026-10-31), once per exercise, with the band on the table:
+Learns each exercise from one slow rep (Miguel, 2026-11-01), replacing v3's two held points:
 
-1. Blue blinking: go to point 1 and hold still; solid green for 1 s when saved.
-2. Purple blinking: go to point 2 and hold still; solid green for 1 s when saved. Point 2 can
-   differ in height (≥ 5 cm), tilt (≥ 15°) or both. The band counts by whichever changed more,
-   or by tilt with height for range of motion when both changed a lot.
-3. In height mode the first 3 reps fine-tune point 2's distance (one calibration move is often
-   10-20% off). The calibration is saved in flash and loaded at power-up. Send `r` over USB or BLE to
-   calibrate for a new exercise, or `w` to wipe the saved calibration first.
+1. Blue blinking: get into the start position of the exercise and hold it for 1 s.
+2. Solid purple: do one slow, full rep, come back to the start and hold.
+3. Solid green for 1 s: learned and saved on the chip, counting starts. It is loaded again at
+   power-up. Send `r` over USB or BLE to learn a new exercise, `n` to start a new set (counts
+   back to 0), or `w` to wipe the saved rep first.
 
-Counting, LED off: one rep = from point 1 to at least 80% of the way to point 2 and back (short
-green flash). Turning back between 50% and 80% is a partial (short red flash), not a rep.
+The band counts by tilt when the learned rep turned at least 15°, otherwise by height when it
+moved at least 5 cm (then the first 3 reps fine-tune the distance). Counting, LED off: one rep
+= from the start to at least 80% of the learned rep and back (short green flash); turning back
+between 50% and 80% is a partial (short red flash), not a rep. Moves off the learned path
+(turning more than 40° off it in tilt mode, tilting more than 35° from the start in height
+mode, e.g. arm swings while walking) are ignored.
 
 Reads the IMU as fast as the loop allows (target 200 Hz, integrating over the measured time
 step), prints integer CSV over USB at 50 Hz, and advertises over Bluetooth LE as
