@@ -15,8 +15,8 @@
 //   gives the range of motion). The calibration is saved in flash and loaded at
 //   power-up (solid green for 1 s, then counting).
 //
-// Reps, LED off: one rep = from point 1 to at least 80% of the way to point 2
-// and back. Full rep: short green flash. Turned back between 50% and 80%: short
+// Reps, LED off: one rep = from one point to at least 80% of the way to the
+// other and back, starting at either point (e.g. at the top for a squat). Full rep: short green flash. Turned back between 50% and 80%: short
 // red flash, counted as a partial, not a rep.
 //
 // Height comes from the accelerometer with gravity taken out, integrated into
@@ -56,7 +56,11 @@ const float GRAV = 9.81;
 
 const float STILL_GYRO_DPS = 8.0;      // still = gyro below this...
 const float STILL_ACC_G = 0.03;        // ...and |accel| within this of gravity
-const unsigned long ZUPT_MS = 60;      // still this long -> speed is zero
+// Speed is only reset to zero when the band is really still: a slow, smooth
+// lift barely accelerates and would otherwise look still and lose its height.
+const float ZUPT_GYRO_DPS = 4.0;
+const float ZUPT_ACC_G = 0.012;
+const unsigned long ZUPT_MS = 150;
 const unsigned long HOLD_MS = 1500;    // still this long -> calibration point saved
 const float MIN_ANGLE_DEG = 15.0;      // point 2 must differ by this much tilt...
 const float MIN_HEIGHT_M = 0.05;       // ...or this much height
@@ -84,13 +88,17 @@ float vz = 0, h = 0;             // vertical speed (m/s) and height (m)
 float calHeight = 0;             // calibrated height pt1 -> pt2 (m), height mode
 int dir = 1;                     // +1 if point 2 is above point 1
 
-unsigned long stillSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
+unsigned long stillSince = 0, calmSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
+float hAtStill = 0;              // height when the band last came to rest
 unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
 int reps = 0, partials = 0;
-bool away = false;               // tilt: left point 1 in this rep
-float maxPos = 0;                // tilt: furthest point reached in this rep
-int phase = 0;                   // height: 0 at 1, 1 going, 2 at 2, 3 returning
+// A rep can start at either point: it goes to the other one and comes back.
+bool away = false;               // tilt: left the starting point in this rep
+int home = 0;                    // tilt: starting point of this rep (0 = point 1, 1 = point 2)
+float maxReach = 0;              // tilt: furthest reached in this rep, as a fraction of the way
+int phase = 0;                   // height: 0 resting, 1 first leg, 2 turning, 3 coming back
+int legDir = 1;                  // height: +1 if the first leg goes up
 float moveStartH = 0, returnStartH = 0, towardRom = 0, repRom = 0, repPeak = 0;
 float repMaxH = 0, repMinH = 0;  // height range in this rep, for the reported ROM
 bool bleOk = false;
@@ -330,9 +338,13 @@ void loop() {
   bool gyroStill = norm(w) < STILL_GYRO_DPS;
   if (gyroStill && fabs(aMag - gMag) < 0.15) gMag += 0.001 * (aMag - gMag);
   bool stillNow = gyroStill && fabs(aMag - gMag) < STILL_ACC_G;
+  if (stillNow && !stillSince) hAtStill = h;
   if (!stillNow) stillSince = 0;
   else if (!stillSince) stillSince = now;
-  bool zupt = stillSince && now - stillSince >= ZUPT_MS;
+  bool calmNow = norm(w) < ZUPT_GYRO_DPS && fabs(aMag - gMag) < ZUPT_ACC_G;
+  if (!calmNow) calmSince = 0;
+  else if (!calmSince) calmSince = now;
+  bool zupt = calmSince && now - calmSince >= ZUPT_MS;
   bool heldStill = stillSince && now - stillSince >= HOLD_MS;
 
   // Gravity in the board frame turns opposite to the board: dg/dt = -w x g.
@@ -351,7 +363,8 @@ void loop() {
   // Vertical acceleration without gravity, up positive (m/s^2).
   float lin = (dot(a, grav) / gMag - gMag) * GRAV;
   if (zupt) vz = 0;
-  else vz += (lin - LEAK_PER_S * vz) * DT;
+  // No leak while calibrating point 2: that lift is often slow and the leak would eat it.
+  else vz += (lin - (state == CAL2 ? 0 : LEAK_PER_S) * vz) * DT;
   h += vz * DT;
 
   float pos = 0;
@@ -384,7 +397,8 @@ void loop() {
     case CAL2:
       led(blinkOn, false, blinkOn);  // purple blinking
       if (heldStill) {
-        float ang = angleDeg(grav, pt1), hgt = fabs(h);
+        // Height from when the band came to rest, not after drifting through the hold.
+        float ang = angleDeg(grav, pt1), hgt = fabs(hAtStill);
         bool tiltOk = ang >= MIN_ANGLE_DEG, heightOk = hgt >= MIN_HEIGHT_M;
         if (tiltOk || heightOk) {
           for (int i = 0; i < 3; i++) pt2[i] = grav[i];
@@ -393,14 +407,14 @@ void loop() {
           scaleTo(axisN, 1);
           span = ang * DEG_TO_RAD;
           calHeight = hgt;
-          dir = h >= 0 ? 1 : -1;
+          dir = hAtStill >= 0 ? 1 : -1;
           float tiltScore = ang / BIG_ANGLE_DEG, heightScore = hgt / BIG_HEIGHT_M;
           if (tiltScore >= 1 && heightScore >= 1) mode = BOTH;
           else if (tiltOk && (!heightOk || tiltScore >= heightScore)) mode = TILT;
           else mode = HEIGHT;
           char line[96];
           snprintf(line, sizeof line, "# point 2 saved, mode %s, angle_deg %ld, height_mm %ld\r\n",
-                   modeName(), lround(ang), lround(h * 1000));
+                   modeName(), lround(ang), lround(hAtStill * 1000));
           Serial.write(line, strlen(line));
           saveCalibration();
           enter(CAL2_DONE);
@@ -413,20 +427,22 @@ void loop() {
       if (h < repMinH) repMinH = h;
       if (mode == TILT || mode == BOTH) {
         pos = tiltPosition();
-        if (!away && pos > POS_LEAVE) { away = true; maxPos = pos; startRep(); }
+        if (!away) home = pos < 0.5 ? 0 : 1;
+        float reach = home == 0 ? pos : 1 - pos;
+        if (!away && reach > POS_LEAVE) { away = true; maxReach = reach; startRep(); }
         if (away) {
-          if (pos > maxPos) maxPos = pos;
-          if (pos < POS_BACK) { away = false; endRep(maxPos); }
+          if (reach > maxReach) maxReach = reach;
+          if (reach < POS_BACK) { away = false; endRep(maxReach); }
         }
       } else {
-        float v = vz * dir;  // positive = towards point 2
+        float v = vz * legDir;  // positive = along the first leg of this rep
         switch (phase) {
           case 0:
-            if (v > SPEED_GO) { phase = 1; moveStartH = h; startRep(); }
+            if (fabs(vz) > SPEED_GO) { legDir = vz > 0 ? 1 : -1; phase = 1; moveStartH = h; startRep(); }
             break;
           case 1:
             if (v < SPEED_END) {
-              towardRom = (h - moveStartH) * dir;
+              towardRom = (h - moveStartH) * legDir;
               if (towardRom < TWITCH_FRACTION * calHeight) phase = 0;  // a twitch or a knock
               else { phase = v < -SPEED_GO ? 3 : 2; returnStartH = h; }
             }
@@ -435,14 +451,17 @@ void loop() {
             if (v < -SPEED_GO) { phase = 3; returnStartH = h; }
             else if (v > SPEED_GO) phase = 1;  // kept going after a pause
             break;
-          case 3:
-            if (v > -SPEED_END) {
+          case 3: {
+            // The rep ends back near where it started: at least halfway back (or when
+            // the band stops), so the flash comes at the start point, not at the turn.
+            float back = (returnStartH - h) * legDir;
+            if ((v > -SPEED_END && back >= 0.5 * towardRom) || zupt) {
               // Fast moves can read short in one direction, so take the longer leg.
-              float back = (returnStartH - h) * dir;
               phase = 0;
               endRep(max(towardRom, back) / calHeight);
             }
             break;
+          }
         }
       }
       led(now < flashUntil && flashRed, now < flashUntil && !flashRed, false);
