@@ -75,7 +75,9 @@ const float TILT_OVER_HEIGHT_DEG = 25.0;   // from this angle tilt wins even if 
 const float BIG_HEIGHT_M = 0.10;       // below that angle, height wins from this distance
 const float MAX_HEIGHT_M = 1.2;        // more than this is drift, not a real move
 const float BACK_FRACTION = 0.3;       // back at the start: within this much of the way
-const float LEARN_MAX_GYRO_DPS = 300.0; // the learned rep must be slow: faster is a pick-up, not a rep
+// The learned rep must be slow: reaching its far end faster than this on average is a
+// pick-up, not a rep (a real slow rep turned ~100 deg in 1.5-3 s, a pick-up 150 deg in a blink).
+const float LEARN_MAX_RATE_DPS = 150.0;
 const float OFF_PATH_DEG = 60.0;       // tilt: turning this far off the learned path
 const float HEIGHT_TILT_DEG = 35.0;    // height: tilting this far from the start position
 const float FULL_REP = 0.8;            // fraction of the learned rep for a rep
@@ -91,12 +93,12 @@ const float SPEED_END = 0.03;          // m/s, a move has ended
 const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ignored
 const int TUNE_REPS = 3;               // height: fine-tune the distance from this many first reps
 const float TUNE_MIN = 0.6;            // ...that went at least this far
-const float LEAK_PER_S = 0.2;          // pulls speed back to zero while moving
+const float LEAK_PER_S = 1.0;          // pulls speed back to zero while moving
 // While moving, the vertical acceleration carries a small offset (the gravity estimate
 // is a few degrees off, the sensor's scale differs per axis), which integrates into a
 // band that seems to rise for metres. Over a rep the real vertical acceleration
 // averages to zero, so a slow running average of it is the offset: take it out.
-const float BIAS_TAU_S = 3.0;
+const float BIAS_TAU_S = 1.0;   // replayed on the 2026-11-02 squat log: 5 full + 2 half, as done
 
 enum State { LEARN_START, LEARN_REP, LEARNED, RUN };
 enum Mode { NONE, TILT, HEIGHT };
@@ -123,7 +125,7 @@ bool offPath = false;            // this rep left the learned path: ignore it
 float repOff = 0;                // furthest off the learned path in this rep (deg), logged
 // Learning the slow rep
 float maxAng = 0;                // furthest turned from the start (deg)
-float learnPeakGyro = 0;         // fastest turn during the learned rep (deg/s)
+unsigned long learnMoveAt = 0, learnFarAt = 0;  // when the learned rep started turning / reached its far end
 bool learnMoving = false;        // a height move is under way
 float learnFromH = 0;            // ...and where it started
 int legs = 0;                    // height legs of at least MIN_HEIGHT_M measured so far
@@ -339,7 +341,7 @@ void restartLearnRep(const char *why) {
   Serial.println(why);
   h = vz = 0;
   maxAng = 0;
-  learnPeakGyro = 0;
+  learnMoveAt = learnFarAt = 0;
   legs = 0;
   leg1 = leg2 = 0;
   learnMoving = false;
@@ -498,8 +500,9 @@ void loop() {
     case LEARN_REP: {
       led(true, false, true);  // solid purple
       float ang = angleDeg(grav, pt1);
-      if (norm(w) > learnPeakGyro) learnPeakGyro = norm(w);
+      if (!learnMoveAt && ang > 5) learnMoveAt = now;
       if (ang > maxAng) {
+        learnFarAt = now;
         maxAng = ang;
         for (int i = 0; i < 3; i++) pt2[i] = grav[i];
         scaleTo(pt2, 1);
@@ -529,10 +532,11 @@ void loop() {
       bool back = ang < max(BACK_FRACTION * maxAng, 8.0f);
       bool enough = maxAng >= MIN_ANGLE_DEG || legs >= 2;
       if (back && enough && heldMs >= END_HOLD_MS) {
-        if (learnPeakGyro > LEARN_MAX_GYRO_DPS) {
+        float rate = learnMoveAt ? maxAng / max((learnFarAt - learnMoveAt) / 1000.0f, 0.05f) : 0;
+        if (rate > LEARN_MAX_RATE_DPS) {
           // Too fast to be the slow rep (e.g. picking the band up): stay purple, try again.
           char line[80];
-          snprintf(line, sizeof line, "# too fast (%ld deg/s), do the slow rep again\r\n", lround(learnPeakGyro));
+          snprintf(line, sizeof line, "# too fast (%ld deg/s), do the slow rep again\r\n", lround(rate));
           Serial.write(line, strlen(line));
           restartLearnRep("# waiting for the slow rep");
           holdSince = 0;

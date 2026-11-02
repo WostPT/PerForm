@@ -21,13 +21,13 @@ HOLD_GYRO_DPS, HOLD_ACC_G = 45.0, 0.08
 START_HOLD_MS, END_HOLD_MS = 1000, 700
 MIN_ANGLE_DEG, MIN_HEIGHT_M = 15.0, 0.05
 TILT_OVER_HEIGHT_DEG, BIG_HEIGHT_M, MAX_HEIGHT_M = 25.0, 0.10, 1.2
-BACK_FRACTION, LEARN_MAX_GYRO_DPS = 0.3, 300.0
+BACK_FRACTION, LEARN_MAX_RATE_DPS = 0.3, 150.0
 OFF_PATH_DEG, HEIGHT_TILT_DEG = 60.0, 35.0
 FULL_REP, PARTIAL_REP = 0.8, 0.5
 POS_LEAVE, POS_BACK, POS_HOME, POS_TURN, STOP_GYRO_DPS = 0.35, 0.3, 0.1, 0.03, 30.0
 SPEED_GO, SPEED_END, TWITCH_FRACTION = 0.10, 0.03, 0.2
 TUNE_REPS, TUNE_MIN = 3, 0.6
-LEAK_PER_S, BIAS_TAU_S = 0.2, 3.0
+LEAK_PER_S, BIAS_TAU_S = 1.0, 1.0
 GRAV = 9.81
 
 
@@ -76,7 +76,7 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
     last_t = None
     pt1 = pt2 = axis = None
     span = 1.0
-    max_ang = peak_gyro = 0.0
+    max_ang = 0.0; move_at = far_at = None
     learn_moving = False; learn_from = 0.0; legs = []; leg_dirs = []
     cal_h = cal_meas = tune_sum = 0.0; tuned = 0; leg_dir = 1
     away = returning = off_path = False; max_reach = min_pos = rep_off = 0.0
@@ -135,13 +135,13 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
         if st['state'] == 'LEARN_START':
             if held >= START_HOLD_MS:
                 pt1 = g_unit; pt2 = g_unit
-                h = vz = 0.0; max_ang = peak_gyro = 0.0; legs, leg_dirs = [], []; learn_moving = False
+                h = vz = 0.0; max_ang = 0.0; move_at = far_at = None; legs, leg_dirs = [], []; learn_moving = False
                 st['state'] = 'LEARN_REP'; hold_since = None
                 out.append((t, 'start saved'))
         elif st['state'] == 'LEARN_REP':
             ang = angle_deg(grav, pt1)
-            peak_gyro = max(peak_gyro, wn)
-            if ang > max_ang: max_ang, pt2 = ang, g_unit
+            if move_at is None and ang > 5: move_at = t
+            if ang > max_ang: max_ang, pt2, far_at = ang, g_unit, t
             if not learn_moving and abs(vz) > SPEED_GO:
                 learn_moving, learn_from = True, h
             elif learn_moving and abs(vz) < SPEED_END:
@@ -155,9 +155,10 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
             back = ang < max(BACK_FRACTION * max_ang, 8.0)
             enough = max_ang >= MIN_ANGLE_DEG or len(legs) >= 2
             if back and enough and held >= END_HOLD_MS:
-                if peak_gyro > LEARN_MAX_GYRO_DPS:
-                    out.append((t, f'too fast ({peak_gyro:.0f} deg/s), again'))
-                    h = vz = 0.0; max_ang = peak_gyro = 0.0; legs, leg_dirs = [], []; hold_since = None
+                rate = max_ang / max((far_at - move_at) / 1000, 0.05) if move_at is not None else 0
+                if rate > LEARN_MAX_RATE_DPS:
+                    out.append((t, f'too fast ({rate:.0f} deg/s), again'))
+                    h = vz = 0.0; max_ang = 0.0; move_at = far_at = None; legs, leg_dirs = [], []; hold_since = None
                     continue
                 longest = max(legs[:2]) if legs else 0.0
                 height_ok = len(legs) >= 2
