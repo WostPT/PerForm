@@ -103,7 +103,7 @@ const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ign
 const int TUNE_REPS = 3;               // height: fine-tune the distance from this many first reps
 const float TUNE_MIN = 0.6;            // ...that went at least this far
 const int BUTTON_PIN = D1;
-const unsigned long BUTTON_DEBOUNCE_MS = 30, BUTTON_SHORT_MS = 1000, BUTTON_LEARN_MS = 2000, BUTTON_OFF_MS = 5000;
+const unsigned long BUTTON_DEBOUNCE_MS = 30, BUTTON_RELEASE_MS = 200, BUTTON_SHORT_MS = 1000, BUTTON_LEARN_MS = 2000, BUTTON_OFF_MS = 5000;
 const unsigned long BATTERY_MS = 30000;
 // The board's battery divider: VBAT_ENABLE (P0.14) low connects the battery, through
 // 1M / 510k, to PIN_VBAT (P0.31). It is kept low all the time: left high, the full battery
@@ -147,6 +147,7 @@ unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
 bool flashBlue = false;           // a button press: blue instead of green/red
 bool buttonDown = false;
+bool buttonRaw = false;
 unsigned long buttonSince = 0, buttonChange = 0, lastBattery = 0;
 int batteryPct = 255, batteryMv = 0;
 int reps = 0, partials = 0;
@@ -446,14 +447,18 @@ void buttonFlash() {
 void command(int c);
 
 // Called every loop: debounced, acts on release (short press, hold to learn) or at 5 s (off).
+// A press counts once the contact has been closed for 30 ms; a release only once it has been
+// open for 200 ms, so a hand-soldered button that drops out for a moment doesn't cut a hold.
 void pollButton(unsigned long now) {
-  bool down = digitalRead(BUTTON_PIN) == LOW;
-  if (down != buttonDown && now - buttonChange >= BUTTON_DEBOUNCE_MS) {
+  bool raw = digitalRead(BUTTON_PIN) == LOW;
+  if (raw != buttonRaw) { buttonRaw = raw; buttonChange = now; }
+  unsigned long need = raw ? BUTTON_DEBOUNCE_MS : BUTTON_RELEASE_MS;
+  if (raw != buttonDown && now - buttonChange >= need) {
+    bool down = raw;
     buttonDown = down;
-    buttonChange = now;
     if (down) buttonSince = now;
     else {
-      unsigned long held = now - buttonSince;
+      unsigned long held = now - BUTTON_RELEASE_MS - buttonSince;  // let go when it opened
       if (held < BUTTON_SHORT_MS) { command('n'); buttonFlash(); }
       else if (held >= BUTTON_LEARN_MS) command('r');
     }
