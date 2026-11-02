@@ -497,7 +497,15 @@ void loop() {
       else if (learnMoving && fabs(vz) < SPEED_END) {
         learnMoving = false;
         float leg = fabs(h - learnFromH);
-        if (leg > MAX_HEIGHT_M) { restartLearnRep("# height not believable, do the slow rep again"); break; }
+        if (leg > MAX_HEIGHT_M) {
+          // The height drifted (fast or big turning moves fool it): drop the height
+          // legs but keep the tilt, which doesn't drift, so a curl still gets learned.
+          Serial.println("# height not believable, using tilt only for this rep");
+          h = vz = 0;
+          legs = 0;
+          leg1 = leg2 = 0;
+          break;
+        }
         if (leg >= MIN_HEIGHT_M) {
           legs++;
           if (legs == 1) { leg1 = leg; leg1Dir = h > learnFromH ? 1 : -1; }
