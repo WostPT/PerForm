@@ -75,6 +75,7 @@ const float TILT_OVER_HEIGHT_DEG = 25.0;   // from this angle tilt wins even if 
 const float BIG_HEIGHT_M = 0.10;       // below that angle, height wins from this distance
 const float MAX_HEIGHT_M = 1.2;        // more than this is drift, not a real move
 const float BACK_FRACTION = 0.3;       // back at the start: within this much of the way
+const float LEARN_MAX_GYRO_DPS = 300.0; // the learned rep must be slow: faster is a pick-up, not a rep
 const float OFF_PATH_DEG = 40.0;       // tilt: turning this far off the learned path
 const float HEIGHT_TILT_DEG = 35.0;    // height: tilting this far from the start position
 const float FULL_REP = 0.8;            // fraction of the learned rep for a rep
@@ -116,6 +117,7 @@ bool offPath = false;            // this rep left the learned path: ignore it
 float repOff = 0;                // furthest off the learned path in this rep (deg), logged
 // Learning the slow rep
 float maxAng = 0;                // furthest turned from the start (deg)
+float learnPeakGyro = 0;         // fastest turn during the learned rep (deg/s)
 bool learnMoving = false;        // a height move is under way
 float learnFromH = 0;            // ...and where it started
 int legs = 0;                    // height legs of at least MIN_HEIGHT_M measured so far
@@ -331,6 +333,7 @@ void restartLearnRep(const char *why) {
   Serial.println(why);
   h = vz = 0;
   maxAng = 0;
+  learnPeakGyro = 0;
   legs = 0;
   leg1 = leg2 = 0;
   learnMoving = false;
@@ -486,6 +489,7 @@ void loop() {
     case LEARN_REP: {
       led(true, false, true);  // solid purple
       float ang = angleDeg(grav, pt1);
+      if (norm(w) > learnPeakGyro) learnPeakGyro = norm(w);
       if (ang > maxAng) {
         maxAng = ang;
         for (int i = 0; i < 3; i++) pt2[i] = grav[i];
@@ -515,7 +519,16 @@ void loop() {
       // Done when back at the start and holding again, after a rep that turned or moved enough.
       bool back = ang < max(BACK_FRACTION * maxAng, 8.0f);
       bool enough = maxAng >= MIN_ANGLE_DEG || legs >= 2;
-      if (back && enough && heldMs >= END_HOLD_MS) finishLearning();
+      if (back && enough && heldMs >= END_HOLD_MS) {
+        if (learnPeakGyro > LEARN_MAX_GYRO_DPS) {
+          // Too fast to be the slow rep (e.g. picking the band up): stay purple, try again.
+          char line[80];
+          snprintf(line, sizeof line, "# too fast (%ld deg/s), do the slow rep again\r\n", lround(learnPeakGyro));
+          Serial.write(line, strlen(line));
+          restartLearnRep("# waiting for the slow rep");
+          holdSince = 0;
+        } else finishLearning();
+      }
       break;
     }
     case LEARNED:
