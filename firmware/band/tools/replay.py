@@ -94,10 +94,19 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
         elif frac >= PARTIAL_REP:
             partials += 1; out.append((t, f'partial {partials} reach_pct {frac*100:.0f}'))
 
+    learn_times = [t for t, e in events if e.startswith('# learn:')][1:]
     for r in rows:
         t = r[0]
         if t < start_t:
             continue
+        if learn_times and t >= learn_times[0]:
+            # Learning restarted on the band ('r' or 'w'): do the same.
+            learn_times.pop(0)
+            st['state'], st['mode'] = 'LEARN_START', None
+            hold_since = None
+            reps = partials = 0
+            away = returning = False; phase = 0
+            out.append((t, 'learn again'))
         dt = 0.02 if last_t is None else min((t - last_t) / 1000, 0.1)
         last_t = t
         a = [r[1] / 1000, r[2] / 1000, r[3] / 1000]
@@ -167,7 +176,7 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
                 axis = unit(cross(pt1, pt2)); span = math.radians(max_ang)
                 cal_h = cal_meas = longest; tune_sum = 0.0; tuned = 0
                 leg_dir = leg_dirs[0] if leg_dirs else 1
-                out.append((t, f'learned, mode {st["mode"]}, angle_deg {max_ang:.0f}, height_mm {longest*1000:.0f}, first leg {"up" if leg_dir > 0 else "down"}'))
+                out.append((t, f'learned, rate {rate:.0f} deg/s, mode {st["mode"]}, angle_deg {max_ang:.0f}, height_mm {longest*1000:.0f}, first leg {"up" if leg_dir > 0 else "down"}'))
                 st['state'] = 'RUN'; h = vz = 0.0
         elif st['state'] == 'RUN':
             if st['mode'] == 'tilt':
