@@ -76,7 +76,7 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
     last_t = None
     pt1 = pt2 = axis = None
     span = 1.0
-    max_ang = 0.0; move_at = far_at = None
+    max_ang = 0.0; move_at = far_at = None; peak_w = turned = 0.0; fast_ms = 0
     learn_moving = False; learn_from = 0.0; legs = []; leg_dirs = []
     cal_h = cal_meas = tune_sum = 0.0; tuned = 0; leg_dir = 1
     away = returning = off_path = False; max_reach = min_pos = rep_off = 0.0
@@ -144,12 +144,15 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
         if st['state'] == 'LEARN_START':
             if held >= START_HOLD_MS:
                 pt1 = g_unit; pt2 = g_unit
-                h = vz = 0.0; max_ang = 0.0; move_at = far_at = None; legs, leg_dirs = [], []; learn_moving = False
+                h = vz = 0.0; max_ang = 0.0; move_at = far_at = None; peak_w = turned = 0.0; fast_ms = 0; legs, leg_dirs = [], []; learn_moving = False
                 st['state'] = 'LEARN_REP'; hold_since = None
                 out.append((t, 'start saved'))
         elif st['state'] == 'LEARN_REP':
             ang = angle_deg(grav, pt1)
             if move_at is None and ang > 5: move_at = t
+            if move_at is not None:
+                peak_w = max(peak_w, wn); turned += wn * dt
+                if wn > 300: fast_ms += dt * 1000
             if ang > max_ang: max_ang, pt2, far_at = ang, g_unit, t
             if not learn_moving and abs(vz) > SPEED_GO:
                 learn_moving, learn_from = True, h
@@ -176,7 +179,7 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
                 axis = unit(cross(pt1, pt2)); span = math.radians(max_ang)
                 cal_h = cal_meas = longest; tune_sum = 0.0; tuned = 0
                 leg_dir = leg_dirs[0] if leg_dirs else 1
-                out.append((t, f'learned, rate {rate:.0f} deg/s, mode {st["mode"]}, angle_deg {max_ang:.0f}, height_mm {longest*1000:.0f}, first leg {"up" if leg_dir > 0 else "down"}'))
+                out.append((t, f'learned, rate {rate:.0f} deg/s, peak {peak_w:.0f}, over300_ms {fast_ms:.0f}, turned/2xangle {turned/max(2*max_ang,1):.1f}, mode {st["mode"]}, angle_deg {max_ang:.0f}, height_mm {longest*1000:.0f}, first leg {"up" if leg_dir > 0 else "down"}'))
                 st['state'] = 'RUN'; h = vz = 0.0
         elif st['state'] == 'RUN':
             if st['mode'] == 'tilt':
