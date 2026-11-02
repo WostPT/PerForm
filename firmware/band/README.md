@@ -34,6 +34,14 @@ between 50% and 80% is a partial (short red flash), not a rep. Moves off the lea
 (turning more than 60° off it in tilt mode, tilting more than 35° from the start in height
 mode, e.g. arm swings while walking) are ignored.
 
+Button between **D1** and **GND** (any two diagonal legs of the 6×6 switch): short press = new
+set (blue flash), hold 2 s = learn a new exercise, hold 5 s = switch off (a press switches it on).
+LiPo on the **BAT+ / BAT−** pads on the back, charged over USB-C; its level is printed every 30 s
+and sent as the last byte of the reps characteristic.
+
+`tools/replay.py` replays a USB log through a Python copy of learning and counting, to try a change
+on recorded sets (`python firmware/band/tools/replay.py firmware/band/logs/<log>.csv`).
+
 Reads the IMU as fast as the loop allows (target 200 Hz, integrating over the measured time
 step), prints integer CSV over USB at 50 Hz, and advertises over Bluetooth LE as
 "PerForm Band" with a reps characteristic (reps, partials, range of motion, peak speed) and an

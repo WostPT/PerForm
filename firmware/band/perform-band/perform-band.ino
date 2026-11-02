@@ -31,18 +31,27 @@
 // mode: 0 none, 1 tilt, 2 height. Lines starting with '#' are events.
 //
 // Bluetooth LE, name "PerForm Band", service 8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10:
-//   ...0002 reps    (read/notify, 10 bytes LE): uint16 reps, uint16 partials,
-//                   uint8 mode, uint8 state, uint16 rom_mm, uint16 peak_speed_mm_s
+//   ...0002 reps    (read/notify, 11 bytes LE): uint16 reps, uint16 partials,
+//                   uint8 mode, uint8 state, uint16 rom_mm, uint16 peak_speed_mm_s,
+//                   uint8 battery % (255 = no battery reading)
 //   ...0003 stream  (notify, 20 bytes LE, 25 Hz while subscribed): uint16 t_ms (wraps),
 //                   int16 ax,ay,az (mg), int16 gx,gy,gz (0.1 deg/s), int16 pos*1000,
 //                   int16 vz (mm/s), int16 h (mm)
 //   ...0004 control (write, 1 byte): 'r' = learn a new exercise, 'n' = new set
 //                   (counts back to 0, same exercise), 'w' = wipe the saved rep and learn again
 
+// Button between D1 and GND (2026-11-02, Miguel):
+//   short press      new set (counts back to 0), short blue flash
+//   hold 2 s         learn a new exercise (turns solid blue while held, blue blinking after)
+//   hold 5 s         switch off (solid red, then dark); a press switches it back on
+// Battery: LiPo on the BAT+/BAT- pads, charged over USB-C. Its voltage is read every 30 s,
+// printed as "# battery mv ... pct ..." and sent as the last byte of the reps characteristic.
+
 #include <ArduinoBLE.h>
 #include <LSM6DS3.h>
 #include <Wire.h>
 #include <math.h>
+#include <nrf_gpio.h>
 #if __has_include("kvstore_global_api.h")
 #include "kvstore_global_api.h"
 #define HAVE_KV 1
@@ -93,6 +102,18 @@ const float SPEED_END = 0.03;          // m/s, a move has ended
 const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ignored
 const int TUNE_REPS = 3;               // height: fine-tune the distance from this many first reps
 const float TUNE_MIN = 0.6;            // ...that went at least this far
+const int BUTTON_PIN = D1;
+const unsigned long BUTTON_DEBOUNCE_MS = 30, BUTTON_SHORT_MS = 1000, BUTTON_LEARN_MS = 2000, BUTTON_OFF_MS = 5000;
+const unsigned long BATTERY_MS = 30000;
+// The board's battery divider: VBAT_ENABLE (P0.14) low connects the battery, through
+// 1M / 510k, to PIN_VBAT (P0.31). It is kept low all the time: left high, the full battery
+// voltage can reach P0.31 while charging.
+#ifndef PIN_VBAT
+#define PIN_VBAT 32
+#endif
+#ifndef VBAT_ENABLE
+#define VBAT_ENABLE 14
+#endif
 const float LEAK_PER_S = 1.0;          // pulls speed back to zero while moving
 // While moving, the vertical acceleration carries a small offset (the gravity estimate
 // is a few degrees off, the sensor's scale differs per axis), which integrates into a
@@ -120,6 +141,10 @@ int legDir = 1;                  // height: +1 if a rep goes up first
 unsigned long stillSince = 0, calmSince = 0, holdSince = 0, stateSince = 0, flashUntil = 0, lastUs = 0;
 unsigned long lastSerial = 0, lastBle = 0;
 bool flashRed = false;
+bool flashBlue = false;           // a button press: blue instead of green/red
+bool buttonDown = false;
+unsigned long buttonSince = 0, buttonChange = 0, lastBattery = 0;
+int batteryPct = 255, batteryMv = 0;
 int reps = 0, partials = 0;
 bool offPath = false;            // this rep left the learned path: ignore it
 float repOff = 0;                // furthest off the learned path in this rep (deg), logged
@@ -151,7 +176,7 @@ struct Calibration {
 const uint32_t CAL_MAGIC = 0x50464234;  // "PFB4"
 
 BLEService bandService("8c1f0001-3b6e-4a6f-9b8e-5f0e2d7a4c10");
-BLECharacteristic repsChar("8c1f0002-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLERead | BLENotify, 10);
+BLECharacteristic repsChar("8c1f0002-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLERead | BLENotify, 11);
 BLECharacteristic streamChar("8c1f0003-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLENotify, 20);
 BLEByteCharacteristic controlChar("8c1f0004-3b6e-4a6f-9b8e-5f0e2d7a4c10", BLEWrite | BLEWriteWithoutResponse);
 BLEDescriptor repsDesc("2901", "Reps");
@@ -255,10 +280,11 @@ void publishReps() {
   if (!bleOk) return;
   uint16_t rom = (uint16_t)constrain(repRom * 1000, 0, 65535);
   uint16_t peak = (uint16_t)constrain(repPeak * 1000, 0, 65535);
-  uint8_t b[10] = { (uint8_t)reps, (uint8_t)(reps >> 8), (uint8_t)partials, (uint8_t)(partials >> 8),
+  uint8_t b[11] = { (uint8_t)reps, (uint8_t)(reps >> 8), (uint8_t)partials, (uint8_t)(partials >> 8),
                     (uint8_t)mode, (uint8_t)state,
-                    (uint8_t)rom, (uint8_t)(rom >> 8), (uint8_t)peak, (uint8_t)(peak >> 8) };
-  repsChar.writeValue(b, 10);
+                    (uint8_t)rom, (uint8_t)(rom >> 8), (uint8_t)peak, (uint8_t)(peak >> 8),
+                    (uint8_t)batteryPct };
+  repsChar.writeValue(b, 11);
 }
 
 void enter(State s) {
@@ -305,6 +331,7 @@ void endRep(float fraction) {
   if (!full && fraction < PARTIAL_REP) return;  // a small wobble, not a rep
   if (full) reps++; else partials++;
   flashRed = !full;
+  flashBlue = false;
   flashUntil = millis() + 200;
   repRom = repMaxH - repMinH;
   snprintf(line, sizeof line, "# %s %d reach_pct %ld rom_mm %ld peak_mm_s %ld off_deg %ld\r\n",
@@ -372,9 +399,72 @@ void put16(uint8_t *b, int i, int v) {
   b[i + 1] = (uint8_t)(s >> 8);
 }
 
+// Battery voltage through the board's divider (10-bit ADC, 3.3 V reference, x 1510/510).
+// A board on USB without a battery reads the charger's output: about 4.2-4.3 V.
+void readBattery() {
+  long sum = 0;
+  for (int i = 0; i < 8; i++) sum += analogRead(PIN_VBAT);
+  batteryMv = (int)lround(sum / 8.0 / 1023.0 * 3300.0 * 1510.0 / 510.0);
+  // LiPo, roughly: 3.3 V empty, 3.7 V about 40%, 4.2 V full.
+  float v = batteryMv / 1000.0;
+  float pct = v >= 3.7 ? 40 + (v - 3.7) / 0.5 * 60 : (v - 3.3) / 0.4 * 40;
+  batteryPct = (int)constrain(lround(pct), 0L, 100L);
+  char line[48];
+  snprintf(line, sizeof line, "# battery mv %d pct %d\r\n", batteryMv, batteryPct);
+  Serial.write(line, strlen(line));
+  publishReps();
+}
+
+// Switch off: everything dark, and only a button press wakes the board (it then starts
+// again from setup, loading the saved rep).
+void switchOff() {
+  Serial.println("# switching off");
+  led(true, false, false);
+  delay(1000);
+  led(false, false, false);
+  if (bleOk) { BLE.disconnect(); BLE.end(); }
+#ifdef PIN_LSM6DS3TR_C_POWER
+  digitalWrite(PIN_LSM6DS3TR_C_POWER, LOW);
+#endif
+  while (digitalRead(BUTTON_PIN) == LOW) delay(10);  // let go first, or the press wakes it at once
+  delay(50);
+  nrf_gpio_cfg_sense_input(digitalPinToPinName(BUTTON_PIN), NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
+  NRF_POWER->SYSTEMOFF = 1;
+  while (true) {}
+}
+
+void buttonFlash() {
+  flashBlue = true;
+  flashRed = false;
+  flashUntil = millis() + 300;
+}
+
+void command(int c);
+
+// Called every loop: debounced, acts on release (short press, hold to learn) or at 5 s (off).
+void pollButton(unsigned long now) {
+  bool down = digitalRead(BUTTON_PIN) == LOW;
+  if (down != buttonDown && now - buttonChange >= BUTTON_DEBOUNCE_MS) {
+    buttonDown = down;
+    buttonChange = now;
+    if (down) buttonSince = now;
+    else {
+      unsigned long held = now - buttonSince;
+      if (held < BUTTON_SHORT_MS) { command('n'); buttonFlash(); }
+      else if (held >= BUTTON_LEARN_MS) command('r');
+    }
+  }
+  if (buttonDown && now - buttonSince >= BUTTON_OFF_MS) switchOff();
+}
+
 void setup() {
   pinMode(LEDR, OUTPUT); pinMode(LEDG, OUTPUT); pinMode(LEDB, OUTPUT);
   led(false, false, false);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(VBAT_ENABLE, OUTPUT);
+  digitalWrite(VBAT_ENABLE, LOW);
+  // Woken by the button: wait until it is let go, so that press isn't read as "new set".
+  while (digitalRead(BUTTON_PIN) == LOW) delay(10);
   Serial.begin(115200);
   // Don't wait for the serial port, so the board also runs on battery.
   unsigned long t0 = millis();
@@ -398,6 +488,7 @@ void setup() {
   float wMean[3] = { wSum[0] / 100, wSum[1] / 100, wSum[2] / 100 };
   if (norm(wMean) < 15) for (int i = 0; i < 3; i++) gyroBias[i] = wMean[i];  // only if it was lying still
   setupBle();
+  readBattery();
   if (loadCalibration()) {
     resetCounting();
     printHeader();
@@ -413,6 +504,7 @@ void setup() {
 void command(int c) {
   if (c == 'w') wipeCalibration();
   if (c == 'r' || c == 'w') startLearning();
+  if (c == 'n' && state != RUN) Serial.println("# new set ignored, still learning");
   if (c == 'n' && state == RUN) {
     resetCounting();
     startRep();
@@ -435,6 +527,8 @@ void loop() {
   float DT = min((nowUs - lastUs) * 1e-6f, 0.1f);
   lastUs = nowUs;
   unsigned long now = millis();
+  pollButton(now);
+  if (now - lastBattery >= BATTERY_MS) { lastBattery = now; readBattery(); }
 
   float a[3], wRaw[3];
   readImu(a, wRaw);
@@ -629,9 +723,12 @@ void loop() {
           }
         }
       }
-      led(now < flashUntil && flashRed, now < flashUntil && !flashRed, false);
+      led(now < flashUntil && flashRed && !flashBlue, now < flashUntil && !flashRed && !flashBlue, now < flashUntil && flashBlue);
       break;
   }
+
+  // Holding the button: solid blue from 2 s (let go = learn a new exercise).
+  if (buttonDown && now - buttonSince >= BUTTON_LEARN_MS) led(false, false, true);
 
   if (now - lastSerial >= SERIAL_MS) {
     lastSerial = now;
