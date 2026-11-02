@@ -108,11 +108,15 @@ const unsigned long BATTERY_MS = 30000;
 // The board's battery divider: VBAT_ENABLE (P0.14) low connects the battery, through
 // 1M / 510k, to PIN_VBAT (P0.31). It is kept low all the time: left high, the full battery
 // voltage can reach P0.31 while charging.
+// Pin numbers are this core's (Seeeduino mbed 2.9.3, SEEED_XIAO_NRF52840_SENSE/pins_arduino.h):
+// PIN_VBAT 6 = P0.31, PIN_VBAT_ENABLE 32 = P0.14. Arduino pin 14 is the blue LED, not P0.14.
 #ifndef PIN_VBAT
-#define PIN_VBAT 32
+#define PIN_VBAT 6
 #endif
-#ifndef VBAT_ENABLE
-#define VBAT_ENABLE 14
+#ifdef PIN_VBAT_ENABLE
+#define VBAT_ENABLE PIN_VBAT_ENABLE
+#else
+#define VBAT_ENABLE 32
 #endif
 const float LEAK_PER_S = 1.0;          // pulls speed back to zero while moving
 // While moving, the vertical acceleration carries a small offset (the gravity estimate
