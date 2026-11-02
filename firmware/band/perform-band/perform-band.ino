@@ -92,6 +92,11 @@ const float TWITCH_FRACTION = 0.2;     // height moves shorter than this are ign
 const int TUNE_REPS = 3;               // height: fine-tune the distance from this many first reps
 const float TUNE_MIN = 0.6;            // ...that went at least this far
 const float LEAK_PER_S = 0.2;          // pulls speed back to zero while moving
+// While moving, the vertical acceleration carries a small offset (the gravity estimate
+// is a few degrees off, the sensor's scale differs per axis), which integrates into a
+// band that seems to rise for metres. Over a rep the real vertical acceleration
+// averages to zero, so a slow running average of it is the offset: take it out.
+const float BIAS_TAU_S = 3.0;
 
 enum State { LEARN_START, LEARN_REP, LEARNED, RUN };
 enum Mode { NONE, TILT, HEIGHT };
@@ -104,6 +109,7 @@ float gyroBias[3] = {0, 0, 0};
 float pt1[3], pt2[3], axisN[3];  // start position, far end of the learned rep (unit), tilt axis
 float span = 1;                  // tilt angle start -> far end (rad)
 float vz = 0, h = 0;             // vertical speed (m/s) and height (m)
+float linBias = 0;               // offset in the vertical acceleration (m/s^2)
 float calHeight = 0;             // height mode: learned distance (m)
 float calMeasured = 0, tuneSum = 0;  // height: learned rep and first reps' legs
 int tuned = TUNE_REPS;           // height: first reps used so far for fine-tuning
@@ -468,6 +474,9 @@ void loop() {
 
   // Vertical acceleration without gravity, up positive (m/s^2).
   float lin = (dot(a, grav) / gMag - gMag) * GRAV;
+  // Still: whatever it reads is offset. Moving: follow it slowly, so reps cancel out.
+  linBias += (lin - linBias) * (zupt ? 0.05f : DT / BIAS_TAU_S);
+  lin -= linBias;
   if (zupt) vz = 0;
   // Less leak during the slow rep: a slow lift barely accelerates and the full leak
   // would eat part of it. Some leak is still needed, or a tiny offset drifts for metres.
