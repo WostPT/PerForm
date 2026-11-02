@@ -655,7 +655,9 @@ void loop() {
       if (h < repMinH) repMinH = h;
       if (mode == TILT) {
         pos = tiltPosition();
-        if (!away && pos > POS_LEAVE) { away = true; maxReach = pos; startRep(); }
+        // Lying far off the learned path (e.g. on the table), the position around the axis is
+        // noise and jumps around: only start a rep from on the path.
+        if (!away && pos > POS_LEAVE && offPathDeg() < OFF_PATH_DEG) { away = true; maxReach = pos; startRep(); }
         if (away) {
           if (pos > maxReach) maxReach = pos;
           float off = offPathDeg();

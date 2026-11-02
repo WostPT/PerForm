@@ -187,7 +187,7 @@ def replay(rows, events, use_bias=True, tau=None, leak=None):
                 d = dot(g_unit, axis)
                 ip = [g_unit[i] - d * axis[i] for i in range(3)]
                 pos = math.atan2(dot(cross(pt1, ip), axis), dot(pt1, ip)) / span
-                if not away and pos > POS_LEAVE:
+                if not away and pos > POS_LEAVE and math.degrees(math.asin(min(1.0, abs(d)))) < OFF_PATH_DEG:
                     away, max_reach, off_path, rep_off = True, pos, False, 0.0
                 if away:
                     max_reach = max(max_reach, pos)
