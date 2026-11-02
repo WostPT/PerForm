@@ -31,7 +31,7 @@ The band counts by tilt when the learned rep turned at least 15°, otherwise by 
 moved at least 5 cm (then the first 3 reps fine-tune the distance). Counting, LED off: one rep
 = from the start to at least 80% of the learned rep and back (short green flash); turning back
 between 50% and 80% is a partial (short red flash), not a rep. Moves off the learned path
-(turning more than 40° off it in tilt mode, tilting more than 35° from the start in height
+(turning more than 60° off it in tilt mode, tilting more than 35° from the start in height
 mode, e.g. arm swings while walking) are ignored.
 
 Reads the IMU as fast as the loop allows (target 200 Hz, integrating over the measured time

@@ -19,7 +19,7 @@
 // learned rep and back. Full rep: short green flash. Turned back between 50% and
 // 80%: short red flash, counted as a partial, not a rep.
 // Moves that don't follow the learned rep are ignored (no flash): turning off its
-// path by more than 40 deg (tilt), or tilting more than 35 deg away from the start
+// path by more than 60 deg (tilt), or tilting more than 35 deg away from the start
 // position (height), as happens when swinging the arms while walking around.
 //
 // USB serial (115200) prints CSV at 50 Hz, integers only:
@@ -76,7 +76,7 @@ const float BIG_HEIGHT_M = 0.10;       // below that angle, height wins from thi
 const float MAX_HEIGHT_M = 1.2;        // more than this is drift, not a real move
 const float BACK_FRACTION = 0.3;       // back at the start: within this much of the way
 const float LEARN_MAX_GYRO_DPS = 300.0; // the learned rep must be slow: faster is a pick-up, not a rep
-const float OFF_PATH_DEG = 40.0;       // tilt: turning this far off the learned path
+const float OFF_PATH_DEG = 60.0;       // tilt: turning this far off the learned path
 const float HEIGHT_TILT_DEG = 35.0;    // height: tilting this far from the start position
 const float FULL_REP = 0.8;            // fraction of the learned rep for a rep
 const float PARTIAL_REP = 0.5;         // ...and for a partial
